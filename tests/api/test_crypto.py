@@ -6,11 +6,11 @@ import base64
 
 import pytest
 
-pytest.importorskip("nacl", reason="PyNaCl not installed (optional: pip install ductor[api])")
+pytest.importorskip("nacl", reason="PyNaCl not installed (optional: pip install botwerk[api])")
 
 from nacl.exceptions import CryptoError
 
-from ductor_bot.api.crypto import E2ESession
+from botwerk_bot.api.crypto import E2ESession
 
 
 def _make_pair() -> tuple[E2ESession, E2ESession]:

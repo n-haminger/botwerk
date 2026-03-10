@@ -9,21 +9,21 @@ from unittest.mock import AsyncMock, patch
 
 import time_machine
 
-from ductor_bot.cli.codex_cache import CodexModelCache
-from ductor_bot.config import AgentConfig, HeartbeatConfig
-from ductor_bot.cron.manager import CronJob, CronManager
-from ductor_bot.cron.observer import CronObserver
-from ductor_bot.workspace.paths import DuctorPaths
+from botwerk_bot.cli.codex_cache import CodexModelCache
+from botwerk_bot.config import AgentConfig, HeartbeatConfig
+from botwerk_bot.cron.manager import CronJob, CronManager
+from botwerk_bot.cron.observer import CronObserver
+from botwerk_bot.workspace.paths import BotwerkPaths
 
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------
 
 
-def _make_paths(tmp_path: Path) -> DuctorPaths:
+def _make_paths(tmp_path: Path) -> BotwerkPaths:
     fw = tmp_path / "fw"
-    paths = DuctorPaths(
-        ductor_home=tmp_path / "home",
+    paths = BotwerkPaths(
+        botwerk_home=tmp_path / "home",
         home_defaults=fw / "workspace",
         framework_root=fw,
     )
@@ -31,7 +31,7 @@ def _make_paths(tmp_path: Path) -> DuctorPaths:
     return paths
 
 
-def _make_manager(paths: DuctorPaths) -> CronManager:
+def _make_manager(paths: BotwerkPaths) -> CronManager:
     return CronManager(jobs_path=paths.cron_jobs_path)
 
 
@@ -44,7 +44,7 @@ def _make_codex_cache() -> CodexModelCache:
 
 
 def _make_observer(
-    paths: DuctorPaths,
+    paths: BotwerkPaths,
     mgr: CronManager,
     **config_overrides: Any,
 ) -> CronObserver:
@@ -56,7 +56,7 @@ def _make_observer(
     )
 
 
-def _add_job(mgr: CronManager, paths: DuctorPaths, **overrides: Any) -> CronJob:
+def _add_job(mgr: CronManager, paths: BotwerkPaths, **overrides: Any) -> CronJob:
     defaults: dict[str, Any] = {
         "id": "test-job",
         "title": "Test Job",
@@ -93,7 +93,7 @@ async def test_cron_ignores_heartbeat_quiet_hours(tmp_path: Path) -> None:
     result_handler = AsyncMock()
     obs.set_result_handler(result_handler)
 
-    with patch("ductor_bot.cron.execution.build_cmd", return_value=None):
+    with patch("botwerk_bot.cron.execution.build_cmd", return_value=None):
         await obs._execute_job("test-job", "do something", "test_task")
 
     # Job proceeded past quiet hours check (heartbeat config is ignored for cron)
@@ -119,7 +119,7 @@ async def test_cron_runs_during_active_hours(tmp_path: Path) -> None:
     result_handler = AsyncMock()
     obs.set_result_handler(result_handler)
 
-    with patch("ductor_bot.cron.execution.build_cmd", return_value=None):
+    with patch("botwerk_bot.cron.execution.build_cmd", return_value=None):
         await obs._execute_job("test-job", "do something", "test_task")
 
     # Job reached execution (build_cmd returned None -> error:cli_not_found)
@@ -181,7 +181,7 @@ async def test_cron_job_quiet_hours_boundary_end(tmp_path: Path) -> None:
     result_handler = AsyncMock()
     obs.set_result_handler(result_handler)
 
-    with patch("ductor_bot.cron.execution.build_cmd", return_value=None):
+    with patch("botwerk_bot.cron.execution.build_cmd", return_value=None):
         await obs._execute_job("test-job", "do something", "test_task")
 
     # NOT skipped because hour 8 is the exclusive end boundary
@@ -207,7 +207,7 @@ async def test_cron_quiet_hours_disabled(tmp_path: Path) -> None:
     result_handler = AsyncMock()
     obs.set_result_handler(result_handler)
 
-    with patch("ductor_bot.cron.execution.build_cmd", return_value=None):
+    with patch("botwerk_bot.cron.execution.build_cmd", return_value=None):
         await obs._execute_job("test-job", "do something", "test_task")
 
     # Job proceeded past quiet hours check (build_cmd returned None -> error)

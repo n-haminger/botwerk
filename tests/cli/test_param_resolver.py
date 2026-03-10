@@ -4,14 +4,14 @@ from __future__ import annotations
 
 import pytest
 
-from ductor_bot.cli.codex_cache import CodexModelCache
-from ductor_bot.cli.codex_discovery import CodexModelInfo
-from ductor_bot.cli.param_resolver import (
+from botwerk_bot.cli.codex_cache import CodexModelCache
+from botwerk_bot.cli.codex_discovery import CodexModelInfo
+from botwerk_bot.cli.param_resolver import (
     TaskOverrides,
     resolve_cli_config,
 )
-from ductor_bot.config import AgentConfig, reset_gemini_models, set_gemini_models
-from ductor_bot.errors import DuctorError
+from botwerk_bot.config import AgentConfig, reset_gemini_models, set_gemini_models
+from botwerk_bot.errors import BotwerkError
 
 
 @pytest.fixture
@@ -20,7 +20,7 @@ def base_config() -> AgentConfig:
     return AgentConfig(
         provider="claude",
         model="sonnet",
-        ductor_home="~/ductor",
+        botwerk_home="~/botwerk",
         permission_mode="normal",
     )
 
@@ -65,7 +65,7 @@ def test_resolve_global_only(base_config: AgentConfig, codex_cache: CodexModelCa
     assert result.reasoning_effort == ""
     assert result.cli_parameters == []
     assert result.permission_mode == "normal"
-    assert result.working_dir == "~/ductor"
+    assert result.working_dir == "~/botwerk"
     assert result.file_access == "all"
 
 
@@ -106,7 +106,7 @@ def test_resolve_invalid_claude_model(
     """Should raise error for invalid Claude model."""
     overrides = TaskOverrides(model="invalid-model")
 
-    with pytest.raises(DuctorError, match="Invalid Claude model"):
+    with pytest.raises(BotwerkError, match="Invalid Claude model"):
         resolve_cli_config(base_config, codex_cache, task_overrides=overrides)
 
 
@@ -119,7 +119,7 @@ def test_resolve_invalid_codex_model(
         model="nonexistent-model",
     )
 
-    with pytest.raises(DuctorError, match="Invalid Codex model"):
+    with pytest.raises(BotwerkError, match="Invalid Codex model"):
         resolve_cli_config(base_config, codex_cache, task_overrides=overrides)
 
 
@@ -188,7 +188,7 @@ def test_resolve_gemini_invalid_against_discovered_models(
     set_gemini_models(frozenset({"gemini-2.5-pro"}))
     overrides = TaskOverrides(provider="gemini", model="gemini-3-pro-preview")
 
-    with pytest.raises(DuctorError, match="Invalid Gemini model"):
+    with pytest.raises(BotwerkError, match="Invalid Gemini model"):
         resolve_cli_config(base_config, codex_cache, task_overrides=overrides)
 
 

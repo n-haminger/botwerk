@@ -1,6 +1,6 @@
 # Automation Quickstart
 
-ductor automation systems:
+botwerk automation systems:
 
 | System | Trigger | Execution Context | Output |
 |---|---|---|---|
@@ -42,8 +42,8 @@ Status values for named-session runs: `ok`, `error:timeout`, `error:cli`, `error
 
 Delegated tasks are separate from `/session`:
 
-- persisted in `~/.ductor/tasks.json`
-- task folders in `~/.ductor/workspace/tasks/<task_id>/`
+- persisted in `~/.botwerk/tasks.json`
+- task folders in `~/.botwerk/workspace/tasks/<task_id>/`
 - managed via `/tasks` command (running/waiting/finished + cancel/cleanup controls)
 - created/resumed/cancelled/deleted through task tools (`tools/task_tools/*.py`) over `InternalAgentAPI /tasks/*`
 - timeout source: `config.tasks.timeout_seconds`
@@ -53,18 +53,18 @@ Result flow:
 - task completion/failure is posted to the chat
 - result is injected into parent agent's current active session (`handle_task_result`)
 - task questions (`ask_parent.py`) are posted and injected via `handle_task_question`
-- forum-topic tasks route back to the originating topic via `thread_id` / `DUCTOR_TOPIC_ID`
+- forum-topic tasks route back to the originating topic via `thread_id` / `BOTWERK_TOPIC_ID`
 
 ## Cron jobs
 
-Cron jobs run in `~/.ductor/workspace/cron_tasks/<task_folder>/`.
+Cron jobs run in `~/.botwerk/workspace/cron_tasks/<task_folder>/`.
 
 Each run is a fresh one-shot subprocess in the task folder. It does not reuse the main chat session.
 
 Typical task folder:
 
 ```text
-~/.ductor/workspace/cron_tasks/weather-report/
+~/.botwerk/workspace/cron_tasks/weather-report/
   CLAUDE.md
   AGENTS.md
   TASK_DESCRIPTION.md

@@ -5,7 +5,7 @@ from __future__ import annotations
 from pathlib import Path
 from unittest.mock import AsyncMock, MagicMock
 
-from ductor_bot.matrix.sender import (
+from botwerk_bot.matrix.sender import (
     MatrixSendOpts,
     _split_text,
     _upload_and_send_file,

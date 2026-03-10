@@ -7,13 +7,13 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
-from ductor_bot.cli.auth import AuthResult, AuthStatus
-from ductor_bot.cli.types import AgentResponse
-from ductor_bot.config import AgentConfig
-from ductor_bot.errors import CLIError, CronError, SessionError, StreamError, WorkspaceError
-from ductor_bot.orchestrator.core import Orchestrator
-from ductor_bot.session.key import SessionKey
-from ductor_bot.workspace.paths import DuctorPaths
+from botwerk_bot.cli.auth import AuthResult, AuthStatus
+from botwerk_bot.cli.types import AgentResponse
+from botwerk_bot.config import AgentConfig
+from botwerk_bot.errors import CLIError, CronError, SessionError, StreamError, WorkspaceError
+from botwerk_bot.orchestrator.core import Orchestrator
+from botwerk_bot.session.key import SessionKey
+from botwerk_bot.workspace.paths import BotwerkPaths
 
 
 @pytest.fixture
@@ -138,7 +138,7 @@ async def test_abort_returns_count(orch: Orchestrator) -> None:
 
 
 async def test_create_with_authenticated_provider(
-    workspace: tuple[DuctorPaths, AgentConfig],
+    workspace: tuple[BotwerkPaths, AgentConfig],
 ) -> None:
     paths, config = workspace
     claude_auth = AuthResult("claude", AuthStatus.AUTHENTICATED)
@@ -146,15 +146,15 @@ async def test_create_with_authenticated_provider(
 
     with (
         patch(
-            "ductor_bot.orchestrator.lifecycle.resolve_paths",
+            "botwerk_bot.orchestrator.lifecycle.resolve_paths",
             return_value=paths,
         ),
         patch(
-            "ductor_bot.cli.auth.check_all_auth",
+            "botwerk_bot.cli.auth.check_all_auth",
             return_value={"claude": claude_auth, "codex": codex_auth},
         ),
         patch(
-            "ductor_bot.orchestrator.observers.watch_rule_files",
+            "botwerk_bot.orchestrator.observers.watch_rule_files",
             new_callable=AsyncMock,
         ),
     ):
@@ -164,7 +164,7 @@ async def test_create_with_authenticated_provider(
 
 
 async def test_create_no_authenticated_providers(
-    workspace: tuple[DuctorPaths, AgentConfig],
+    workspace: tuple[BotwerkPaths, AgentConfig],
 ) -> None:
     paths, config = workspace
     claude_auth = AuthResult("claude", AuthStatus.NOT_FOUND)
@@ -172,15 +172,15 @@ async def test_create_no_authenticated_providers(
 
     with (
         patch(
-            "ductor_bot.orchestrator.lifecycle.resolve_paths",
+            "botwerk_bot.orchestrator.lifecycle.resolve_paths",
             return_value=paths,
         ),
         patch(
-            "ductor_bot.cli.auth.check_all_auth",
+            "botwerk_bot.cli.auth.check_all_auth",
             return_value={"claude": claude_auth, "codex": codex_auth},
         ),
         patch(
-            "ductor_bot.orchestrator.observers.watch_rule_files",
+            "botwerk_bot.orchestrator.observers.watch_rule_files",
             new_callable=AsyncMock,
         ),
     ):
@@ -190,7 +190,7 @@ async def test_create_no_authenticated_providers(
 
 
 async def test_create_installed_but_not_authenticated(
-    workspace: tuple[DuctorPaths, AgentConfig],
+    workspace: tuple[BotwerkPaths, AgentConfig],
 ) -> None:
     paths, config = workspace
     claude_auth = AuthResult("claude", AuthStatus.INSTALLED)
@@ -198,15 +198,15 @@ async def test_create_installed_but_not_authenticated(
 
     with (
         patch(
-            "ductor_bot.orchestrator.lifecycle.resolve_paths",
+            "botwerk_bot.orchestrator.lifecycle.resolve_paths",
             return_value=paths,
         ),
         patch(
-            "ductor_bot.cli.auth.check_all_auth",
+            "botwerk_bot.cli.auth.check_all_auth",
             return_value={"claude": claude_auth, "codex": codex_auth},
         ),
         patch(
-            "ductor_bot.orchestrator.observers.watch_rule_files",
+            "botwerk_bot.orchestrator.observers.watch_rule_files",
             new_callable=AsyncMock,
         ),
     ):
@@ -216,7 +216,7 @@ async def test_create_installed_but_not_authenticated(
 
 
 async def test_create_both_providers_authenticated(
-    workspace: tuple[DuctorPaths, AgentConfig],
+    workspace: tuple[BotwerkPaths, AgentConfig],
 ) -> None:
     paths, config = workspace
     claude_auth = AuthResult("claude", AuthStatus.AUTHENTICATED)
@@ -224,15 +224,15 @@ async def test_create_both_providers_authenticated(
 
     with (
         patch(
-            "ductor_bot.orchestrator.lifecycle.resolve_paths",
+            "botwerk_bot.orchestrator.lifecycle.resolve_paths",
             return_value=paths,
         ),
         patch(
-            "ductor_bot.cli.auth.check_all_auth",
+            "botwerk_bot.cli.auth.check_all_auth",
             return_value={"claude": claude_auth, "codex": codex_auth},
         ),
         patch(
-            "ductor_bot.orchestrator.observers.watch_rule_files",
+            "botwerk_bot.orchestrator.observers.watch_rule_files",
             new_callable=AsyncMock,
         ),
     ):
@@ -242,22 +242,22 @@ async def test_create_both_providers_authenticated(
 
 
 async def test_create_starts_cron_and_heartbeat(
-    workspace: tuple[DuctorPaths, AgentConfig],
+    workspace: tuple[BotwerkPaths, AgentConfig],
 ) -> None:
     paths, config = workspace
     claude_auth = AuthResult("claude", AuthStatus.AUTHENTICATED)
 
     with (
         patch(
-            "ductor_bot.orchestrator.lifecycle.resolve_paths",
+            "botwerk_bot.orchestrator.lifecycle.resolve_paths",
             return_value=paths,
         ),
         patch(
-            "ductor_bot.cli.auth.check_all_auth",
+            "botwerk_bot.cli.auth.check_all_auth",
             return_value={"claude": claude_auth},
         ),
         patch(
-            "ductor_bot.orchestrator.observers.watch_rule_files",
+            "botwerk_bot.orchestrator.observers.watch_rule_files",
             new_callable=AsyncMock,
         ),
     ):
@@ -428,7 +428,7 @@ async def test_streaming_cancelled_error_propagates(orch: Orchestrator) -> None:
 
 async def test_handle_heartbeat_delegates_to_flow(orch: Orchestrator) -> None:
     with patch(
-        "ductor_bot.orchestrator.core.heartbeat_flow",
+        "botwerk_bot.orchestrator.core.heartbeat_flow",
         new_callable=AsyncMock,
         return_value="Alert: something happened",
     ) as mock_flow:
@@ -440,7 +440,7 @@ async def test_handle_heartbeat_delegates_to_flow(orch: Orchestrator) -> None:
 
 async def test_handle_heartbeat_returns_none_on_ack(orch: Orchestrator) -> None:
     with patch(
-        "ductor_bot.orchestrator.core.heartbeat_flow",
+        "botwerk_bot.orchestrator.core.heartbeat_flow",
         new_callable=AsyncMock,
         return_value=None,
     ):
@@ -508,7 +508,7 @@ async def test_suspicious_input_still_routes(orch: Orchestrator) -> None:
 
 
 def test_paths_property(
-    workspace: tuple[DuctorPaths, AgentConfig],
+    workspace: tuple[BotwerkPaths, AgentConfig],
 ) -> None:
     paths, config = workspace
     o = Orchestrator(config, paths)

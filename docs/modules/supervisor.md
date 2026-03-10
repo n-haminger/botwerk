@@ -4,14 +4,14 @@ In-process multi-agent supervisor (`AgentSupervisor`) for main agent + optional 
 
 ## File
 
-- `ductor_bot/multiagent/supervisor.py`
+- `botwerk_bot/multiagent/supervisor.py`
 
 ## Purpose
 
 `run_telegram()` always starts `AgentSupervisor`.
 
 - main agent always runs under supervision
-- sub-agents are loaded from `~/.ductor/agents.json`
+- sub-agents are loaded from `~/.botwerk/agents.json`
 - crash/restart policy is handled per agent task inside one asyncio process
 
 ## Startup lifecycle
@@ -20,7 +20,7 @@ In-process multi-agent supervisor (`AgentSupervisor`) for main agent + optional 
 
 1. start `InterAgentBus`
 2. start `InternalAgentAPI` (`127.0.0.1:8799` in host mode, `0.0.0.0:8799` in Docker mode)
-3. if `tasks.enabled=true`: create shared `TaskHub` (`~/.ductor/tasks.json` + `~/.ductor/workspace/tasks/`) and attach it to `InternalAgentAPI`
+3. if `tasks.enabled=true`: create shared `TaskHub` (`~/.botwerk/tasks.json` + `~/.botwerk/workspace/tasks/`) and attach it to `InternalAgentAPI`
 4. create/start main `AgentStack`
 5. wait up to 120s for main startup readiness (`_main_ready`) before sub-agent startup
 6. load + start sub-agents from `agents.json`
@@ -52,9 +52,9 @@ Each agent runs in `_supervised_run(...)` with health tracking.
 When a sub-agent has `linux_user: true` in `agents.json`:
 
 1. `_ensure_agent_user()` runs `sudo scripts/manage-agent-user.sh create <name>` before stack creation
-2. `_fix_agent_perms()` re-chowns the workspace after `init_workspace()` (which creates files as the ductor user)
+2. `_fix_agent_perms()` re-chowns the workspace after `init_workspace()` (which creates files as the botwerk user)
 
-The provisioning script creates system users (`ductor-<name>`), symlinks Claude credentials, and writes per-agent sudoers entries.
+The provisioning script creates system users (`botwerk-<name>`), symlinks Claude credentials, and writes per-agent sudoers entries.
 
 ## Orchestrator hook injection
 

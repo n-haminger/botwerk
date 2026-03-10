@@ -1,6 +1,6 @@
 # multiagent/
 
-Multi-agent runtime: run multiple independent ductor agents in one process.
+Multi-agent runtime: run multiple independent botwerk agents in one process.
 
 ## Files
 
@@ -79,7 +79,7 @@ Merge behavior:
 - base: main `AgentConfig`
 - override: non-null `SubAgentConfig` fields
 - always forced:
-  - `ductor_home=~/.ductor/agents/<name>/`
+  - `botwerk_home=~/.botwerk/agents/<name>/`
   - sub-agent `telegram_token`, `allowed_user_ids`, `allowed_group_ids`
   - `api.enabled=false` unless explicitly provided for sub-agent
 
@@ -88,7 +88,7 @@ Merge behavior:
 Isolated per sub-agent:
 
 - transport credentials and auth (Telegram token or Matrix account)
-- workspace and files under `~/.ductor/agents/<name>/`
+- workspace and files under `~/.botwerk/agents/<name>/`
 - `sessions.json`, `named_sessions.json`, cron/webhook state
 - Linux user (optional, via `linux_user: true` in `agents.json`)
 
@@ -97,13 +97,13 @@ Shared across process:
 - `InterAgentBus`
 - `InternalAgentAPI`
 - optional shared `TaskHub`
-- central log file (`~/.ductor/logs/agent.log`)
-- shared knowledge source (`~/.ductor/SHAREDMEMORY.md`)
+- central log file (`~/.botwerk/logs/agent.log`)
+- shared knowledge source (`~/.botwerk/SHAREDMEMORY.md`)
 
 ## Linux user isolation
 
 When `"linux_user": true` is set in `agents.json`, CLI subprocesses run as
-`ductor-<name>` via `sudo -u`. The supervisor provisions the user automatically
+`botwerk-<name>` via `sudo -u`. The supervisor provisions the user automatically
 on first start. Docker and `linux_user` are mutually exclusive (Docker wins).
 
 Key files: `scripts/manage-agent-user.sh` (provisioning), `cli/base.py`
@@ -159,7 +159,7 @@ This enables task submission from any agent while preserving owner routing.
 
 ## Shared knowledge sync
 
-`SharedKnowledgeSync` watches `~/.ductor/SHAREDMEMORY.md` and mirrors content into each agent's `MAINMEMORY.md` block.
+`SharedKnowledgeSync` watches `~/.botwerk/SHAREDMEMORY.md` and mirrors content into each agent's `MAINMEMORY.md` block.
 
 Legacy HTML marker format is migrated to current block markers when rewritten.
 
@@ -174,9 +174,9 @@ Telegram (main agent only):
 
 CLI:
 
-- `ductor agents`
-- `ductor agents list`
-- `ductor agents add <name>`
-- `ductor agents remove <name>`
+- `botwerk agents`
+- `botwerk agents list`
+- `botwerk agents add <name>`
+- `botwerk agents remove <name>`
 
-`ductor agents list` fetches live health from internal API when main bot is running.
+`botwerk agents list` fetches live health from internal API when main bot is running.

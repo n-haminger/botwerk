@@ -11,10 +11,10 @@ Daily retention cleanup for workspace file-drop directories.
 
 Targets retention cleanup in:
 
-- `~/.ductor/workspace/telegram_files/` (Telegram media)
-- `~/.ductor/workspace/matrix_files/` (Matrix media)
-- `~/.ductor/workspace/output_to_user/`
-- `~/.ductor/workspace/api_files/`
+- `~/.botwerk/workspace/telegram_files/` (Telegram media)
+- `~/.botwerk/workspace/matrix_files/` (Matrix media)
+- `~/.botwerk/workspace/output_to_user/`
+- `~/.botwerk/workspace/api_files/`
 
 ## Config (`AgentConfig.cleanup`)
 

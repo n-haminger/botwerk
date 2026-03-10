@@ -9,10 +9,10 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
-from ductor_bot.config import AgentConfig
-from ductor_bot.multiagent.health import AgentHealth
-from ductor_bot.multiagent.models import SubAgentConfig
-from ductor_bot.multiagent.supervisor import (
+from botwerk_bot.config import AgentConfig
+from botwerk_bot.multiagent.health import AgentHealth
+from botwerk_bot.multiagent.models import SubAgentConfig
+from botwerk_bot.multiagent.supervisor import (
     _MAX_RESTART_RETRIES,
     AgentSupervisor,
 )
@@ -20,9 +20,9 @@ from ductor_bot.multiagent.supervisor import (
 
 @pytest.fixture
 def main_config(tmp_path: Path) -> AgentConfig:
-    """Create a main config with tmp_path as ductor_home."""
+    """Create a main config with tmp_path as botwerk_home."""
     return AgentConfig(
-        ductor_home=str(tmp_path),
+        botwerk_home=str(tmp_path),
         telegram_token="main-token",
         allowed_user_ids=[1],
     )
@@ -55,11 +55,11 @@ class TestStartupFailures:
     ) -> None:
         with (
             patch(
-                "ductor_bot.multiagent.internal_api.InternalAgentAPI.start",
+                "botwerk_bot.multiagent.internal_api.InternalAgentAPI.start",
                 new_callable=AsyncMock,
                 return_value=False,
             ),
-            patch("ductor_bot.multiagent.supervisor.AgentStack.create", new_callable=AsyncMock),
+            patch("botwerk_bot.multiagent.supervisor.AgentStack.create", new_callable=AsyncMock),
             pytest.raises(RuntimeError, match="Internal agent API failed to start"),
         ):
             await supervisor.start()
@@ -94,7 +94,7 @@ class TestStopAgent:
 
         supervisor._health["sub1"] = AgentHealth(name="sub1", status="running")
 
-        from ductor_bot.multiagent.bus import InterAgentBus
+        from botwerk_bot.multiagent.bus import InterAgentBus
 
         supervisor._bus = InterAgentBus()
         supervisor._bus.register("sub1", mock_stack)
@@ -222,7 +222,7 @@ class TestOnAgentsChanged:
         """When token changes in agents.json, the agent is restarted."""
         # Current state: sub1 running with old token
         old_config = AgentConfig(
-            telegram_token="old-token", ductor_home=str(tmp_path / "agents/sub1")
+            telegram_token="old-token", botwerk_home=str(tmp_path / "agents/sub1")
         )
         supervisor._stacks["sub1"] = MagicMock(config=old_config)
 
@@ -292,7 +292,7 @@ class TestStartSubAgent:
         sub_cfg = SubAgentConfig(name="sub1", telegram_token="tok:1")
 
         with patch(
-            "ductor_bot.multiagent.supervisor.AgentStack.create",
+            "botwerk_bot.multiagent.supervisor.AgentStack.create",
             side_effect=RuntimeError("boom"),
         ):
             await supervisor._start_sub_agent(sub_cfg)
@@ -324,7 +324,7 @@ class TestStopAll:
             "sub1": asyncio.create_task(asyncio.sleep(999)),
         }
 
-        from ductor_bot.multiagent.bus import InterAgentBus
+        from botwerk_bot.multiagent.bus import InterAgentBus
 
         supervisor._bus = InterAgentBus()
         supervisor._bus.register("main", main_stack)
@@ -362,12 +362,12 @@ class TestStopAll:
         with (
             patch.object(supervisor, "_sync_sub_agents", new_callable=AsyncMock),
             patch(
-                "ductor_bot.multiagent.supervisor.AgentStack.create",
+                "botwerk_bot.multiagent.supervisor.AgentStack.create",
                 new_callable=AsyncMock,
                 return_value=main_stack,
             ),
             patch(
-                "ductor_bot.multiagent.shared_knowledge.SharedKnowledgeSync",
+                "botwerk_bot.multiagent.shared_knowledge.SharedKnowledgeSync",
             ) as mock_sks_cls,
         ):
             mock_sks = MagicMock()
@@ -530,7 +530,7 @@ class TestAbortAllAgents:
 
         supervisor._stacks = {"main": main_stack, "sub1": sub_stack}
 
-        from ductor_bot.multiagent.bus import InterAgentBus
+        from botwerk_bot.multiagent.bus import InterAgentBus
 
         supervisor._bus = InterAgentBus()
 
@@ -556,7 +556,7 @@ class TestAbortAllAgents:
 
     async def test_includes_bus_cancel(self, supervisor: AgentSupervisor) -> None:
         """Bus async tasks are also cancelled."""
-        from ductor_bot.multiagent.bus import InterAgentBus
+        from botwerk_bot.multiagent.bus import InterAgentBus
 
         supervisor._bus = InterAgentBus()
         supervisor._bus.cancel_all_async = AsyncMock(return_value=2)

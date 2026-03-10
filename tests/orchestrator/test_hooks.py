@@ -6,17 +6,17 @@ from unittest.mock import AsyncMock
 
 import pytest
 
-from ductor_bot.cli.types import AgentResponse
-from ductor_bot.orchestrator.core import Orchestrator
-from ductor_bot.orchestrator.flows import normal
-from ductor_bot.orchestrator.hooks import (
+from botwerk_bot.cli.types import AgentResponse
+from botwerk_bot.orchestrator.core import Orchestrator
+from botwerk_bot.orchestrator.flows import normal
+from botwerk_bot.orchestrator.hooks import (
     MAINMEMORY_REMINDER,
     HookContext,
     MessageHook,
     MessageHookRegistry,
     every_n_messages,
 )
-from ductor_bot.session.key import SessionKey
+from botwerk_bot.session.key import SessionKey
 
 # ---------------------------------------------------------------------------
 # Unit tests: HookContext, conditions, registry

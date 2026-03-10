@@ -113,8 +113,8 @@ Behavior:
 
 ## Persistence
 
-- sessions: `~/.ductor/sessions.json`
-- named sessions: `~/.ductor/named_sessions.json`
+- sessions: `~/.botwerk/sessions.json`
+- named sessions: `~/.botwerk/named_sessions.json`
 
 Storage is JSON + atomic write helpers (`atomic_json_save`).
 I/O runs in worker threads (`asyncio.to_thread`).

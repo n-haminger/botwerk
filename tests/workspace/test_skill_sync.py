@@ -10,8 +10,8 @@ from unittest.mock import patch
 
 import pytest
 
-from ductor_bot.workspace.paths import DuctorPaths
-from ductor_bot.workspace.skill_sync import (
+from botwerk_bot.workspace.paths import BotwerkPaths
+from botwerk_bot.workspace.skill_sync import (
     _MANAGED_MARKER,
     _clean_broken_links,
     _discover_skills,
@@ -20,16 +20,16 @@ from ductor_bot.workspace.skill_sync import (
     _is_managed_copy,
     _is_under,
     _resolve_canonical,
-    cleanup_ductor_links,
+    cleanup_botwerk_links,
     sync_bundled_skills,
     sync_skills,
     watch_skill_sync,
 )
 
 
-def _make_paths(tmp_path: Path) -> DuctorPaths:
-    return DuctorPaths(
-        ductor_home=tmp_path / "ductor_home",
+def _make_paths(tmp_path: Path) -> BotwerkPaths:
+    return BotwerkPaths(
+        botwerk_home=tmp_path / "botwerk_home",
         home_defaults=tmp_path / "fw" / "_home_defaults",
         framework_root=tmp_path / "fw",
     )
@@ -107,14 +107,14 @@ def test_discover_ignores_plain_files(tmp_path: Path) -> None:
 # ---------------------------------------------------------------------------
 
 
-def test_canonical_ductor_priority(tmp_path: Path) -> None:
-    ductor = {"sk": tmp_path / "ductor" / "sk"}
+def test_canonical_botwerk_priority(tmp_path: Path) -> None:
+    botwerk = {"sk": tmp_path / "botwerk" / "sk"}
     claude = {"sk": tmp_path / "claude" / "sk"}
     codex = {"sk": tmp_path / "codex" / "sk"}
-    for d in (ductor["sk"], claude["sk"], codex["sk"]):
+    for d in (botwerk["sk"], claude["sk"], codex["sk"]):
         d.mkdir(parents=True)
-    result = _resolve_canonical("sk", ductor, claude, codex)
-    assert result == ductor["sk"]
+    result = _resolve_canonical("sk", botwerk, claude, codex)
+    assert result == botwerk["sk"]
 
 
 def test_canonical_claude_over_codex(tmp_path: Path) -> None:
@@ -231,7 +231,7 @@ def test_clean_nonexistent_dir(tmp_path: Path) -> None:
 
 def _setup_three_dirs(
     tmp_path: Path,
-) -> tuple[DuctorPaths, Path, Path]:
+) -> tuple[BotwerkPaths, Path, Path]:
     paths = _make_paths(tmp_path)
     paths.skills_dir.mkdir(parents=True)
     claude_home = tmp_path / "fake_home" / ".claude"
@@ -241,10 +241,10 @@ def _setup_three_dirs(
     return paths, claude_home / "skills", codex_home / "skills"
 
 
-def test_sync_claude_to_ductor(tmp_path: Path) -> None:
+def test_sync_claude_to_botwerk(tmp_path: Path) -> None:
     paths, claude_skills, _ = _setup_three_dirs(tmp_path)
     _make_skill(claude_skills, "from-claude")
-    with patch("ductor_bot.workspace.skill_sync._cli_skill_dirs") as mock:
+    with patch("botwerk_bot.workspace.skill_sync._cli_skill_dirs") as mock:
         mock.return_value = {"claude": claude_skills}
         sync_skills(paths)
     link = paths.skills_dir / "from-claude"
@@ -252,10 +252,10 @@ def test_sync_claude_to_ductor(tmp_path: Path) -> None:
     assert link.resolve() == (claude_skills / "from-claude").resolve()
 
 
-def test_sync_codex_to_ductor(tmp_path: Path) -> None:
+def test_sync_codex_to_botwerk(tmp_path: Path) -> None:
     paths, _, codex_skills = _setup_three_dirs(tmp_path)
     _make_skill(codex_skills, "from-codex")
-    with patch("ductor_bot.workspace.skill_sync._cli_skill_dirs") as mock:
+    with patch("botwerk_bot.workspace.skill_sync._cli_skill_dirs") as mock:
         mock.return_value = {"codex": codex_skills}
         sync_skills(paths)
     link = paths.skills_dir / "from-codex"
@@ -263,27 +263,27 @@ def test_sync_codex_to_ductor(tmp_path: Path) -> None:
     assert link.resolve() == (codex_skills / "from-codex").resolve()
 
 
-def test_sync_ductor_to_both(tmp_path: Path) -> None:
+def test_sync_botwerk_to_both(tmp_path: Path) -> None:
     paths, claude_skills, codex_skills = _setup_three_dirs(tmp_path)
     claude_skills.mkdir(parents=True, exist_ok=True)
     codex_skills.mkdir(parents=True, exist_ok=True)
-    _make_skill(paths.skills_dir, "from-ductor")
-    with patch("ductor_bot.workspace.skill_sync._cli_skill_dirs") as mock:
+    _make_skill(paths.skills_dir, "from-botwerk")
+    with patch("botwerk_bot.workspace.skill_sync._cli_skill_dirs") as mock:
         mock.return_value = {"claude": claude_skills, "codex": codex_skills}
         sync_skills(paths)
     for d in (claude_skills, codex_skills):
-        link = d / "from-ductor"
+        link = d / "from-botwerk"
         assert link.is_symlink()
-        assert link.resolve() == (paths.skills_dir / "from-ductor").resolve()
+        assert link.resolve() == (paths.skills_dir / "from-botwerk").resolve()
 
 
-def test_sync_gemini_to_ductor(tmp_path: Path) -> None:
+def test_sync_gemini_to_botwerk(tmp_path: Path) -> None:
     paths, _, _ = _setup_three_dirs(tmp_path)
     gemini_home = tmp_path / "fake_home" / ".gemini"
     gemini_home.mkdir(parents=True)
     gemini_skills = gemini_home / "skills"
     _make_skill(gemini_skills, "from-gemini")
-    with patch("ductor_bot.workspace.skill_sync._cli_skill_dirs") as mock:
+    with patch("botwerk_bot.workspace.skill_sync._cli_skill_dirs") as mock:
         mock.return_value = {"gemini": gemini_skills}
         sync_skills(paths)
     link = paths.skills_dir / "from-gemini"
@@ -291,7 +291,7 @@ def test_sync_gemini_to_ductor(tmp_path: Path) -> None:
     assert link.resolve() == (gemini_skills / "from-gemini").resolve()
 
 
-def test_sync_ductor_to_all_three(tmp_path: Path) -> None:
+def test_sync_botwerk_to_all_three(tmp_path: Path) -> None:
     paths, claude_skills, codex_skills = _setup_three_dirs(tmp_path)
     gemini_home = tmp_path / "fake_home" / ".gemini"
     gemini_home.mkdir(parents=True)
@@ -299,8 +299,8 @@ def test_sync_ductor_to_all_three(tmp_path: Path) -> None:
     claude_skills.mkdir(parents=True, exist_ok=True)
     codex_skills.mkdir(parents=True, exist_ok=True)
     gemini_skills.mkdir(parents=True, exist_ok=True)
-    _make_skill(paths.skills_dir, "from-ductor")
-    with patch("ductor_bot.workspace.skill_sync._cli_skill_dirs") as mock:
+    _make_skill(paths.skills_dir, "from-botwerk")
+    with patch("botwerk_bot.workspace.skill_sync._cli_skill_dirs") as mock:
         mock.return_value = {
             "claude": claude_skills,
             "codex": codex_skills,
@@ -308,16 +308,16 @@ def test_sync_ductor_to_all_three(tmp_path: Path) -> None:
         }
         sync_skills(paths)
     for d in (claude_skills, codex_skills, gemini_skills):
-        link = d / "from-ductor"
+        link = d / "from-botwerk"
         assert link.is_symlink()
-        assert link.resolve() == (paths.skills_dir / "from-ductor").resolve()
+        assert link.resolve() == (paths.skills_dir / "from-botwerk").resolve()
 
 
 def test_sync_no_providers(tmp_path: Path) -> None:
     paths = _make_paths(tmp_path)
     paths.skills_dir.mkdir(parents=True)
     _make_skill(paths.skills_dir, "lonely")
-    with patch("ductor_bot.workspace.skill_sync._cli_skill_dirs") as mock:
+    with patch("botwerk_bot.workspace.skill_sync._cli_skill_dirs") as mock:
         mock.return_value = {}
         sync_skills(paths)
     assert (paths.skills_dir / "lonely").is_dir()
@@ -327,7 +327,7 @@ def test_sync_preserves_real_dirs(tmp_path: Path) -> None:
     paths, claude_skills, codex_skills = _setup_three_dirs(tmp_path)
     _make_skill(claude_skills, "shared")
     _make_skill(codex_skills, "shared")
-    with patch("ductor_bot.workspace.skill_sync._cli_skill_dirs") as mock:
+    with patch("botwerk_bot.workspace.skill_sync._cli_skill_dirs") as mock:
         mock.return_value = {"claude": claude_skills, "codex": codex_skills}
         sync_skills(paths)
     assert not (claude_skills / "shared").is_symlink()
@@ -345,19 +345,19 @@ def test_sync_external_symlink(tmp_path: Path) -> None:
     (claude_skills.parent).mkdir(parents=True, exist_ok=True)
     claude_skills.mkdir(exist_ok=True)
     (claude_skills / "ext-skill").symlink_to(external_real)
-    with patch("ductor_bot.workspace.skill_sync._cli_skill_dirs") as mock:
+    with patch("botwerk_bot.workspace.skill_sync._cli_skill_dirs") as mock:
         mock.return_value = {"claude": claude_skills, "codex": codex_skills}
         sync_skills(paths)
-    ductor_link = paths.skills_dir / "ext-skill"
-    assert ductor_link.is_symlink()
-    assert ductor_link.resolve() == external_real.resolve()
+    botwerk_link = paths.skills_dir / "ext-skill"
+    assert botwerk_link.is_symlink()
+    assert botwerk_link.resolve() == external_real.resolve()
 
 
 def test_sync_idempotent(tmp_path: Path) -> None:
     paths, claude_skills, _ = _setup_three_dirs(tmp_path)
     claude_skills.mkdir(parents=True, exist_ok=True)
     _make_skill(paths.skills_dir, "my-skill")
-    with patch("ductor_bot.workspace.skill_sync._cli_skill_dirs") as mock:
+    with patch("botwerk_bot.workspace.skill_sync._cli_skill_dirs") as mock:
         mock.return_value = {"claude": claude_skills}
         sync_skills(paths)
         sync_skills(paths)
@@ -370,12 +370,12 @@ def test_sync_cleans_broken_after_delete(tmp_path: Path) -> None:
     paths, claude_skills, _ = _setup_three_dirs(tmp_path)
     claude_skills.mkdir(parents=True, exist_ok=True)
     sk = _make_skill(paths.skills_dir, "temp-skill")
-    with patch("ductor_bot.workspace.skill_sync._cli_skill_dirs") as mock:
+    with patch("botwerk_bot.workspace.skill_sync._cli_skill_dirs") as mock:
         mock.return_value = {"claude": claude_skills}
         sync_skills(paths)
     assert (claude_skills / "temp-skill").is_symlink()
     shutil.rmtree(sk)
-    with patch("ductor_bot.workspace.skill_sync._cli_skill_dirs") as mock:
+    with patch("botwerk_bot.workspace.skill_sync._cli_skill_dirs") as mock:
         mock.return_value = {"claude": claude_skills}
         sync_skills(paths)
     assert not (claude_skills / "temp-skill").exists()
@@ -389,7 +389,7 @@ def test_sync_cleans_broken_after_delete(tmp_path: Path) -> None:
 async def test_watch_detects_new_skill(tmp_path: Path) -> None:
     paths, claude_skills, _ = _setup_three_dirs(tmp_path)
     claude_skills.mkdir(parents=True, exist_ok=True)
-    with patch("ductor_bot.workspace.skill_sync._cli_skill_dirs") as mock:
+    with patch("botwerk_bot.workspace.skill_sync._cli_skill_dirs") as mock:
         mock.return_value = {"claude": claude_skills}
         task = asyncio.create_task(watch_skill_sync(paths, interval=0.1))
         try:
@@ -405,7 +405,7 @@ async def test_watch_detects_new_skill(tmp_path: Path) -> None:
 async def test_watch_cancellation(tmp_path: Path) -> None:
     paths = _make_paths(tmp_path)
     paths.skills_dir.mkdir(parents=True)
-    with patch("ductor_bot.workspace.skill_sync._cli_skill_dirs") as mock:
+    with patch("botwerk_bot.workspace.skill_sync._cli_skill_dirs") as mock:
         mock.return_value = {}
         task = asyncio.create_task(watch_skill_sync(paths, interval=0.1))
         await asyncio.sleep(0.05)
@@ -415,7 +415,7 @@ async def test_watch_cancellation(tmp_path: Path) -> None:
 
 
 # ---------------------------------------------------------------------------
-# Group 7: DuctorPaths.skills_dir property
+# Group 7: BotwerkPaths.skills_dir property
 # ---------------------------------------------------------------------------
 
 
@@ -437,7 +437,7 @@ def test_deeply_nested_skill(tmp_path: Path) -> None:
     (sk / "scripts").mkdir()
     (sk / "scripts" / "run.py").write_text("print('hello')")
     (sk / "results").mkdir()
-    with patch("ductor_bot.workspace.skill_sync._cli_skill_dirs") as mock:
+    with patch("botwerk_bot.workspace.skill_sync._cli_skill_dirs") as mock:
         mock.return_value = {"claude": claude_skills}
         sync_skills(paths)
     link = paths.skills_dir / "complex-skill"
@@ -453,8 +453,8 @@ def test_permission_error_logged(tmp_path: Path, caplog: pytest.LogCaptureFixtur
     paths, claude_skills, _ = _setup_three_dirs(tmp_path)
     _make_skill(paths.skills_dir, "fail-skill")
     with (
-        patch("ductor_bot.workspace.skill_sync._cli_skill_dirs") as mock_dirs,
-        patch("ductor_bot.workspace.skill_sync._create_dir_link", side_effect=OSError("denied")),
+        patch("botwerk_bot.workspace.skill_sync._cli_skill_dirs") as mock_dirs,
+        patch("botwerk_bot.workspace.skill_sync._create_dir_link", side_effect=OSError("denied")),
     ):
         mock_dirs.return_value = {"claude": claude_skills}
         sync_skills(paths)
@@ -506,10 +506,10 @@ def test_sync_preserves_external_symlink(tmp_path: Path) -> None:
     # User symlink in .claude pointing to external location
     (claude_skills / "my-skill").symlink_to(external)
 
-    # Ductor also has a skill with the same name
+    # Botwerk also has a skill with the same name
     _make_skill(paths.skills_dir, "my-skill")
 
-    with patch("ductor_bot.workspace.skill_sync._cli_skill_dirs") as mock:
+    with patch("botwerk_bot.workspace.skill_sync._cli_skill_dirs") as mock:
         mock.return_value = {"claude": claude_skills}
         sync_skills(paths)
 
@@ -520,7 +520,7 @@ def test_sync_preserves_external_symlink(tmp_path: Path) -> None:
 
 
 def test_sync_replaces_internal_symlink(tmp_path: Path) -> None:
-    """Symlinks pointing inside sync dirs (ductor-managed) can be updated."""
+    """Symlinks pointing inside sync dirs (botwerk-managed) can be updated."""
     paths, claude_skills, codex_skills = _setup_three_dirs(tmp_path)
     claude_skills.mkdir(parents=True, exist_ok=True)
     codex_skills.mkdir(parents=True, exist_ok=True)
@@ -531,14 +531,14 @@ def test_sync_replaces_internal_symlink(tmp_path: Path) -> None:
     # Claude has a symlink pointing to codex (inside sync dirs)
     (claude_skills / "shared").symlink_to(codex_skills / "shared")
 
-    # Ductor now has a real skill with the same name (higher priority)
+    # Botwerk now has a real skill with the same name (higher priority)
     _make_skill(paths.skills_dir, "shared")
 
-    with patch("ductor_bot.workspace.skill_sync._cli_skill_dirs") as mock:
+    with patch("botwerk_bot.workspace.skill_sync._cli_skill_dirs") as mock:
         mock.return_value = {"claude": claude_skills, "codex": codex_skills}
         sync_skills(paths)
 
-    # Claude's symlink should now point to ductor (higher priority canonical)
+    # Claude's symlink should now point to botwerk (higher priority canonical)
     link = claude_skills / "shared"
     assert link.is_symlink()
     assert link.resolve() == (paths.skills_dir / "shared").resolve()
@@ -628,27 +628,27 @@ def test_bundled_no_dir_noop(tmp_path: Path) -> None:
 
 
 # ---------------------------------------------------------------------------
-# Group 12: cleanup_ductor_links
+# Group 12: cleanup_botwerk_links
 # ---------------------------------------------------------------------------
 
 
-def test_cleanup_removes_ductor_links(tmp_path: Path) -> None:
+def test_cleanup_removes_botwerk_links(tmp_path: Path) -> None:
     paths, claude_skills, codex_skills = _setup_three_dirs(tmp_path)
     claude_skills.mkdir(parents=True, exist_ok=True)
     codex_skills.mkdir(parents=True, exist_ok=True)
 
-    # Simulate ductor-created symlinks (target under ductor skills dir)
-    _make_skill(paths.skills_dir, "from-ductor")
-    (claude_skills / "from-ductor").symlink_to(paths.skills_dir / "from-ductor")
-    (codex_skills / "from-ductor").symlink_to(paths.skills_dir / "from-ductor")
+    # Simulate botwerk-created symlinks (target under botwerk skills dir)
+    _make_skill(paths.skills_dir, "from-botwerk")
+    (claude_skills / "from-botwerk").symlink_to(paths.skills_dir / "from-botwerk")
+    (codex_skills / "from-botwerk").symlink_to(paths.skills_dir / "from-botwerk")
 
-    with patch("ductor_bot.workspace.skill_sync._cli_skill_dirs") as mock:
+    with patch("botwerk_bot.workspace.skill_sync._cli_skill_dirs") as mock:
         mock.return_value = {"claude": claude_skills, "codex": codex_skills}
-        removed = cleanup_ductor_links(paths)
+        removed = cleanup_botwerk_links(paths)
 
     assert removed == 2
-    assert not (claude_skills / "from-ductor").exists()
-    assert not (codex_skills / "from-ductor").exists()
+    assert not (claude_skills / "from-botwerk").exists()
+    assert not (codex_skills / "from-botwerk").exists()
 
 
 def test_cleanup_preserves_external_links(tmp_path: Path) -> None:
@@ -659,9 +659,9 @@ def test_cleanup_preserves_external_links(tmp_path: Path) -> None:
     external.mkdir(parents=True)
     (claude_skills / "user-skill").symlink_to(external)
 
-    with patch("ductor_bot.workspace.skill_sync._cli_skill_dirs") as mock:
+    with patch("botwerk_bot.workspace.skill_sync._cli_skill_dirs") as mock:
         mock.return_value = {"claude": claude_skills}
-        removed = cleanup_ductor_links(paths)
+        removed = cleanup_botwerk_links(paths)
 
     assert removed == 0
     assert (claude_skills / "user-skill").is_symlink()
@@ -671,9 +671,9 @@ def test_cleanup_preserves_real_dirs(tmp_path: Path) -> None:
     paths, claude_skills, _ = _setup_three_dirs(tmp_path)
     _make_skill(claude_skills, "real-skill")
 
-    with patch("ductor_bot.workspace.skill_sync._cli_skill_dirs") as mock:
+    with patch("botwerk_bot.workspace.skill_sync._cli_skill_dirs") as mock:
         mock.return_value = {"claude": claude_skills}
-        removed = cleanup_ductor_links(paths)
+        removed = cleanup_botwerk_links(paths)
 
     assert removed == 0
     assert (claude_skills / "real-skill").is_dir()
@@ -688,9 +688,9 @@ def test_cleanup_removes_bundled_links(tmp_path: Path) -> None:
     bundled_skill = _make_skill(paths.bundled_skills_dir, "bundled-one")
     (claude_skills / "bundled-one").symlink_to(bundled_skill)
 
-    with patch("ductor_bot.workspace.skill_sync._cli_skill_dirs") as mock:
+    with patch("botwerk_bot.workspace.skill_sync._cli_skill_dirs") as mock:
         mock.return_value = {"claude": claude_skills}
-        removed = cleanup_ductor_links(paths)
+        removed = cleanup_botwerk_links(paths)
 
     assert removed == 1
     assert not (claude_skills / "bundled-one").exists()
@@ -698,9 +698,9 @@ def test_cleanup_removes_bundled_links(tmp_path: Path) -> None:
 
 def test_cleanup_no_providers(tmp_path: Path) -> None:
     paths = _make_paths(tmp_path)
-    with patch("ductor_bot.workspace.skill_sync._cli_skill_dirs") as mock:
+    with patch("botwerk_bot.workspace.skill_sync._cli_skill_dirs") as mock:
         mock.return_value = {}
-        removed = cleanup_ductor_links(paths)
+        removed = cleanup_botwerk_links(paths)
     assert removed == 0
 
 
@@ -805,7 +805,7 @@ def test_sync_docker_copies_instead_of_links(tmp_path: Path) -> None:
     paths, claude_skills, _ = _setup_three_dirs(tmp_path)
     claude_skills.mkdir(parents=True, exist_ok=True)
     _make_skill(paths.skills_dir, "my-skill")
-    with patch("ductor_bot.workspace.skill_sync._cli_skill_dirs") as mock:
+    with patch("botwerk_bot.workspace.skill_sync._cli_skill_dirs") as mock:
         mock.return_value = {"claude": claude_skills}
         sync_skills(paths, docker_active=True)
     dest = claude_skills / "my-skill"
@@ -820,7 +820,7 @@ def test_sync_docker_preserves_user_dirs(tmp_path: Path) -> None:
     _make_skill(claude_skills, "shared")
     _make_skill(paths.skills_dir, "shared")
     (claude_skills / "shared" / "SKILL.md").write_text("# user version")
-    with patch("ductor_bot.workspace.skill_sync._cli_skill_dirs") as mock:
+    with patch("botwerk_bot.workspace.skill_sync._cli_skill_dirs") as mock:
         mock.return_value = {"claude": claude_skills}
         sync_skills(paths, docker_active=True)
     assert not (claude_skills / "shared").is_symlink()
@@ -831,7 +831,7 @@ def test_sync_docker_idempotent(tmp_path: Path) -> None:
     paths, claude_skills, _ = _setup_three_dirs(tmp_path)
     claude_skills.mkdir(parents=True, exist_ok=True)
     _make_skill(paths.skills_dir, "sk")
-    with patch("ductor_bot.workspace.skill_sync._cli_skill_dirs") as mock:
+    with patch("botwerk_bot.workspace.skill_sync._cli_skill_dirs") as mock:
         mock.return_value = {"claude": claude_skills}
         sync_skills(paths, docker_active=True)
         sync_skills(paths, docker_active=True)

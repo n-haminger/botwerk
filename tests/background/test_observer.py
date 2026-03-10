@@ -10,22 +10,22 @@ from unittest.mock import AsyncMock, patch
 
 import pytest
 
-from ductor_bot.background.models import BackgroundResult, BackgroundSubmit
-from ductor_bot.background.observer import MAX_TASKS_PER_CHAT, BackgroundObserver
-from ductor_bot.cli.param_resolver import TaskExecutionConfig
-from ductor_bot.cron.execution import OneShotExecutionResult
-from ductor_bot.infra.task_runner import TaskResult
-from ductor_bot.workspace.paths import DuctorPaths
+from botwerk_bot.background.models import BackgroundResult, BackgroundSubmit
+from botwerk_bot.background.observer import MAX_TASKS_PER_CHAT, BackgroundObserver
+from botwerk_bot.cli.param_resolver import TaskExecutionConfig
+from botwerk_bot.cron.execution import OneShotExecutionResult
+from botwerk_bot.infra.task_runner import TaskResult
+from botwerk_bot.workspace.paths import BotwerkPaths
 
 
 def _sub(chat_id: int = 123, prompt: str = "", message_id: int = 1) -> BackgroundSubmit:
     return BackgroundSubmit(chat_id=chat_id, prompt=prompt, message_id=message_id, thread_id=None)
 
 
-def _make_paths(tmp_path: Path) -> DuctorPaths:
+def _make_paths(tmp_path: Path) -> BotwerkPaths:
     fw = tmp_path / "fw"
-    paths = DuctorPaths(
-        ductor_home=tmp_path / "home", home_defaults=fw / "workspace", framework_root=fw
+    paths = BotwerkPaths(
+        botwerk_home=tmp_path / "home", home_defaults=fw / "workspace", framework_root=fw
     )
     paths.workspace.mkdir(parents=True, exist_ok=True)
     return paths
@@ -45,7 +45,7 @@ def _make_exec_config(**overrides: Any) -> TaskExecutionConfig:
     return TaskExecutionConfig(**defaults)
 
 
-def _make_observer(paths: DuctorPaths, timeout: float = 300.0) -> BackgroundObserver:
+def _make_observer(paths: BotwerkPaths, timeout: float = 300.0) -> BackgroundObserver:
     return BackgroundObserver(paths, timeout_seconds=timeout)
 
 
@@ -83,12 +83,12 @@ def _blocking_run(event: asyncio.Event) -> AsyncMock:
 
 
 @pytest.fixture
-def paths(tmp_path: Path) -> DuctorPaths:
+def paths(tmp_path: Path) -> BotwerkPaths:
     return _make_paths(tmp_path)
 
 
 @pytest.fixture
-async def observer(paths: DuctorPaths) -> AsyncIterator[BackgroundObserver]:
+async def observer(paths: BotwerkPaths) -> AsyncIterator[BackgroundObserver]:
     obs = _make_observer(paths)
     yield obs
     await obs.shutdown()
@@ -99,7 +99,7 @@ class TestSubmit:
     async def test_returns_task_id(self, observer: BackgroundObserver) -> None:
         config = _make_exec_config()
         with patch(
-            "ductor_bot.background.observer.run_oneshot_task",
+            "botwerk_bot.background.observer.run_oneshot_task",
             return_value=_cli_not_found_task_result(),
         ):
             handler = AsyncMock()
@@ -112,7 +112,7 @@ class TestSubmit:
         config = _make_exec_config()
         event = asyncio.Event()
         with patch(
-            "ductor_bot.background.observer.run_oneshot_task",
+            "botwerk_bot.background.observer.run_oneshot_task",
             new=_blocking_run(event),
         ):
             observer.set_result_handler(AsyncMock())
@@ -127,7 +127,7 @@ class TestSubmit:
         config = _make_exec_config()
         event = asyncio.Event()
         with patch(
-            "ductor_bot.background.observer.run_oneshot_task",
+            "botwerk_bot.background.observer.run_oneshot_task",
             new=_blocking_run(event),
         ):
             observer.set_result_handler(AsyncMock())
@@ -148,7 +148,7 @@ class TestExecution:
         observer.set_result_handler(handler)
 
         result = _success_task_result("Hello world")
-        with patch("ductor_bot.background.observer.run_oneshot_task", return_value=result):
+        with patch("botwerk_bot.background.observer.run_oneshot_task", return_value=result):
             observer.submit(_sub(prompt="say hello", message_id=42), config)
             await asyncio.sleep(0.05)
 
@@ -166,7 +166,7 @@ class TestExecution:
         observer.set_result_handler(handler)
 
         with patch(
-            "ductor_bot.background.observer.run_oneshot_task",
+            "botwerk_bot.background.observer.run_oneshot_task",
             return_value=_cli_not_found_task_result(),
         ):
             observer.submit(_sub(prompt="test"), config)
@@ -193,7 +193,7 @@ class TestExecution:
                 timed_out=True,
             ),
         )
-        with patch("ductor_bot.background.observer.run_oneshot_task", return_value=result):
+        with patch("botwerk_bot.background.observer.run_oneshot_task", return_value=result):
             observer.submit(_sub(prompt="slow task"), config)
             await asyncio.sleep(0.05)
 
@@ -209,7 +209,7 @@ class TestCancel:
         observer.set_result_handler(handler)
 
         with patch(
-            "ductor_bot.background.observer.run_oneshot_task",
+            "botwerk_bot.background.observer.run_oneshot_task",
             new=_blocking_run(event),
         ):
             observer.submit(_sub(prompt="task1"), config)
@@ -227,7 +227,7 @@ class TestCancel:
         observer.set_result_handler(handler)
 
         with patch(
-            "ductor_bot.background.observer.run_oneshot_task",
+            "botwerk_bot.background.observer.run_oneshot_task",
             new=_blocking_run(event),
         ):
             observer.submit(_sub(prompt="cancellable"), config)
@@ -244,7 +244,7 @@ class TestCancel:
         event = asyncio.Event()
 
         with patch(
-            "ductor_bot.background.observer.run_oneshot_task",
+            "botwerk_bot.background.observer.run_oneshot_task",
             new=_blocking_run(event),
         ):
             observer.set_result_handler(AsyncMock())
@@ -263,7 +263,7 @@ class TestCleanup:
         observer.set_result_handler(handler)
 
         result = _success_task_result("ok")
-        with patch("ductor_bot.background.observer.run_oneshot_task", return_value=result):
+        with patch("botwerk_bot.background.observer.run_oneshot_task", return_value=result):
             observer.submit(_sub(prompt="quick"), config)
             await asyncio.sleep(0.05)
 

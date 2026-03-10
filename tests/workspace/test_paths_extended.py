@@ -4,13 +4,13 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from ductor_bot.workspace.paths import DuctorPaths
+from botwerk_bot.workspace.paths import BotwerkPaths
 
 
-def _paths(tmp_path: Path) -> DuctorPaths:
+def _paths(tmp_path: Path) -> BotwerkPaths:
     fw = tmp_path / "fw"
-    return DuctorPaths(
-        ductor_home=tmp_path / "home", home_defaults=fw / "workspace", framework_root=fw
+    return BotwerkPaths(
+        botwerk_home=tmp_path / "home", home_defaults=fw / "workspace", framework_root=fw
     )
 
 

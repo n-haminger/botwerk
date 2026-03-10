@@ -1,4 +1,4 @@
-"""Tests for the interactive ~/.ductor file browser."""
+"""Tests for the interactive ~/.botwerk file browser."""
 
 from __future__ import annotations
 
@@ -6,20 +6,20 @@ from pathlib import Path
 
 import pytest
 
-from ductor_bot.bot.file_browser import (
+from botwerk_bot.bot.file_browser import (
     SF_FILE_PREFIX,
     SF_PREFIX,
     file_browser_start,
     handle_file_browser_callback,
     is_file_browser_callback,
 )
-from ductor_bot.workspace.paths import DuctorPaths
+from botwerk_bot.workspace.paths import BotwerkPaths
 
 
 @pytest.fixture
-def paths(tmp_path: Path) -> DuctorPaths:
-    """DuctorPaths with a temporary ductor_home populated with test dirs/files."""
-    home = tmp_path / "ductor"
+def paths(tmp_path: Path) -> BotwerkPaths:
+    """BotwerkPaths with a temporary botwerk_home populated with test dirs/files."""
+    home = tmp_path / "botwerk"
     home.mkdir()
 
     (home / "config").mkdir()
@@ -37,7 +37,7 @@ def paths(tmp_path: Path) -> DuctorPaths:
     (home / ".hidden_dir").mkdir()
     (home / "workspace" / "__pycache__").mkdir()
 
-    return DuctorPaths(ductor_home=home)
+    return BotwerkPaths(botwerk_home=home)
 
 
 # ---------------------------------------------------------------------------
@@ -67,32 +67,32 @@ class TestIsFileBrowserCallback:
 
 
 class TestFileBrowserStart:
-    async def test_root_listing_shows_directories(self, paths: DuctorPaths) -> None:
+    async def test_root_listing_shows_directories(self, paths: BotwerkPaths) -> None:
         text, _keyboard = await file_browser_start(paths)
 
         assert "File Browser" in text
-        assert "~/.ductor/" in text
+        assert "~/.botwerk/" in text
         assert "config/" in text
         assert "logs/" in text
         assert "workspace/" in text
 
-    async def test_root_listing_shows_files(self, paths: DuctorPaths) -> None:
+    async def test_root_listing_shows_files(self, paths: BotwerkPaths) -> None:
         text, _ = await file_browser_start(paths)
 
         assert "sessions.json" in text
 
-    async def test_root_listing_excludes_hidden(self, paths: DuctorPaths) -> None:
+    async def test_root_listing_excludes_hidden(self, paths: BotwerkPaths) -> None:
         text, _ = await file_browser_start(paths)
 
         assert ".hidden_file" not in text
         assert ".hidden_dir" not in text
 
-    async def test_root_has_no_back_button(self, paths: DuctorPaths) -> None:
+    async def test_root_has_no_back_button(self, paths: BotwerkPaths) -> None:
         _, keyboard = await file_browser_start(paths)
 
         assert not any("Back" in btn.text for row in keyboard.inline_keyboard for btn in row)
 
-    async def test_root_has_file_request_button(self, paths: DuctorPaths) -> None:
+    async def test_root_has_file_request_button(self, paths: BotwerkPaths) -> None:
         _, keyboard = await file_browser_start(paths)
 
         last_row = keyboard.inline_keyboard[-1]
@@ -100,7 +100,7 @@ class TestFileBrowserStart:
         assert last_row[0].callback_data == f"{SF_FILE_PREFIX}"
         assert "file" in last_row[0].text.lower()
 
-    async def test_root_has_folder_buttons(self, paths: DuctorPaths) -> None:
+    async def test_root_has_folder_buttons(self, paths: BotwerkPaths) -> None:
         _, keyboard = await file_browser_start(paths)
 
         folder_callbacks = [
@@ -120,17 +120,17 @@ class TestFileBrowserStart:
 
 
 class TestDirectoryNavigation:
-    async def test_navigate_to_subfolder(self, paths: DuctorPaths) -> None:
+    async def test_navigate_to_subfolder(self, paths: BotwerkPaths) -> None:
         text, keyboard, prompt = await handle_file_browser_callback(paths, "sf:workspace")
 
         assert prompt is None
         assert keyboard is not None
-        assert "~/.ductor/workspace/" in text
+        assert "~/.botwerk/workspace/" in text
         assert "skills/" in text
         assert "tools/" in text
         assert "CLAUDE.md" in text
 
-    async def test_subfolder_has_back_button(self, paths: DuctorPaths) -> None:
+    async def test_subfolder_has_back_button(self, paths: BotwerkPaths) -> None:
         _, keyboard, _ = await handle_file_browser_callback(paths, "sf:workspace")
 
         assert keyboard is not None
@@ -140,14 +140,14 @@ class TestDirectoryNavigation:
         assert len(back_buttons) == 1
         assert back_buttons[0].callback_data == "sf:"
 
-    async def test_deep_navigation(self, paths: DuctorPaths) -> None:
+    async def test_deep_navigation(self, paths: BotwerkPaths) -> None:
         text, keyboard, _ = await handle_file_browser_callback(paths, "sf:workspace/tools")
 
-        assert "~/.ductor/workspace/tools/" in text
+        assert "~/.botwerk/workspace/tools/" in text
         assert "cron_tools/" in text
         assert keyboard is not None
 
-    async def test_deep_back_goes_to_parent(self, paths: DuctorPaths) -> None:
+    async def test_deep_back_goes_to_parent(self, paths: BotwerkPaths) -> None:
         _, keyboard, _ = await handle_file_browser_callback(paths, "sf:workspace/tools")
 
         assert keyboard is not None
@@ -157,18 +157,18 @@ class TestDirectoryNavigation:
         assert len(back_buttons) == 1
         assert back_buttons[0].callback_data == "sf:workspace"
 
-    async def test_excludes_pycache(self, paths: DuctorPaths) -> None:
+    async def test_excludes_pycache(self, paths: BotwerkPaths) -> None:
         text, _, _ = await handle_file_browser_callback(paths, "sf:workspace")
 
         assert "__pycache__" not in text
 
-    async def test_empty_directory(self, paths: DuctorPaths) -> None:
+    async def test_empty_directory(self, paths: BotwerkPaths) -> None:
         text, keyboard, _ = await handle_file_browser_callback(paths, "sf:logs")
 
         assert "(empty)" in text
         assert keyboard is not None
 
-    async def test_nonexistent_directory(self, paths: DuctorPaths) -> None:
+    async def test_nonexistent_directory(self, paths: BotwerkPaths) -> None:
         text, keyboard, _ = await handle_file_browser_callback(paths, "sf:does_not_exist")
 
         assert "not found" in text.lower()
@@ -181,7 +181,7 @@ class TestDirectoryNavigation:
 
 
 class TestFileRequest:
-    async def test_file_request_returns_prompt(self, paths: DuctorPaths) -> None:
+    async def test_file_request_returns_prompt(self, paths: BotwerkPaths) -> None:
         text, keyboard, prompt = await handle_file_browser_callback(paths, "sf!workspace/tools")
 
         assert prompt is not None
@@ -189,11 +189,11 @@ class TestFileRequest:
         assert text == ""
         assert keyboard is None
 
-    async def test_file_request_root(self, paths: DuctorPaths) -> None:
+    async def test_file_request_root(self, paths: BotwerkPaths) -> None:
         _, _, prompt = await handle_file_browser_callback(paths, "sf!")
 
         assert prompt is not None
-        assert str(paths.ductor_home.resolve()) in prompt
+        assert str(paths.botwerk_home.resolve()) in prompt
 
 
 # ---------------------------------------------------------------------------
@@ -202,17 +202,17 @@ class TestFileRequest:
 
 
 class TestPathSafety:
-    async def test_parent_traversal_blocked(self, paths: DuctorPaths) -> None:
+    async def test_parent_traversal_blocked(self, paths: BotwerkPaths) -> None:
         text, _, _ = await handle_file_browser_callback(paths, "sf:..")
 
         assert "not found" in text.lower()
 
-    async def test_double_parent_traversal_blocked(self, paths: DuctorPaths) -> None:
+    async def test_double_parent_traversal_blocked(self, paths: BotwerkPaths) -> None:
         text, _, _ = await handle_file_browser_callback(paths, "sf:workspace/../../etc")
 
         assert "not found" in text.lower()
 
-    async def test_absolute_path_blocked(self, paths: DuctorPaths) -> None:
+    async def test_absolute_path_blocked(self, paths: BotwerkPaths) -> None:
         text, _, _ = await handle_file_browser_callback(paths, "sf:/etc/passwd")
 
         assert "not found" in text.lower()

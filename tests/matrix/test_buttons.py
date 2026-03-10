@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from ductor_bot.matrix.buttons import REACTION_DIGITS, ButtonTracker
+from botwerk_bot.matrix.buttons import REACTION_DIGITS, ButtonTracker
 
 
 class TestButtonTracker:

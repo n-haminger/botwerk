@@ -2,7 +2,7 @@
     "log_level": "INFO",
     "provider": "claude",
     "model": "opus",
-    "ductor_home": "~/.ductor",
+    "botwerk_home": "~/.botwerk",
     "idle_timeout_minutes": 1440,
     "session_age_warning_hours": 12,
     "daily_reset_hour": 4,
@@ -38,8 +38,8 @@
     },
     "docker": {
         "enabled": false,
-        "image_name": "ductor-sandbox",
-        "container_name": "ductor-sandbox",
+        "image_name": "botwerk-sandbox",
+        "container_name": "botwerk-sandbox",
         "auto_build": true
     },
     "cleanup": {

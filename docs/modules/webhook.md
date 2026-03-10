@@ -13,7 +13,7 @@ HTTP ingress for external event triggers.
 
 ## Persistence
 
-File: `~/.ductor/webhooks.json`
+File: `~/.botwerk/webhooks.json`
 
 - format: `{ "hooks": [...] }`
 - atomic writes

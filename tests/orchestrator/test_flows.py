@@ -6,9 +6,9 @@ from unittest.mock import AsyncMock
 
 import pytest
 
-from ductor_bot.cli.types import AgentResponse
-from ductor_bot.orchestrator.core import Orchestrator
-from ductor_bot.orchestrator.flows import (
+from botwerk_bot.cli.types import AgentResponse
+from botwerk_bot.orchestrator.core import Orchestrator
+from botwerk_bot.orchestrator.flows import (
     StreamingCallbacks,
     _finish_normal,
     _strip_ack_token,
@@ -16,9 +16,9 @@ from ductor_bot.orchestrator.flows import (
     normal,
     normal_streaming,
 )
-from ductor_bot.orchestrator.registry import OrchestratorResult
-from ductor_bot.session import SessionData
-from ductor_bot.session.key import SessionKey
+from botwerk_bot.orchestrator.registry import OrchestratorResult
+from botwerk_bot.session import SessionData
+from botwerk_bot.session.key import SessionKey
 
 
 @pytest.fixture
@@ -226,7 +226,7 @@ async def test_normal_preserves_existing_session_target_on_restart(orch: Orchest
     assert request.model_override == "gemini-3-pro-preview"
 
 
-async def test_normal_warns_for_gemini_api_key_mode_without_ductor_key(
+async def test_normal_warns_for_gemini_api_key_mode_without_botwerk_key(
     orch: Orchestrator,
 ) -> None:
     mock_execute = AsyncMock(return_value=_mock_response())
@@ -243,7 +243,7 @@ async def test_normal_warns_for_gemini_api_key_mode_without_ductor_key(
     mock_execute.assert_not_awaited()
 
 
-async def test_streaming_warns_for_gemini_api_key_mode_without_ductor_key(
+async def test_streaming_warns_for_gemini_api_key_mode_without_botwerk_key(
     orch: Orchestrator,
 ) -> None:
     mock_streaming = AsyncMock(return_value=_mock_response())

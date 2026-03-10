@@ -92,7 +92,7 @@ Abort:
 
 Upload target:
 
-- `~/.ductor/workspace/api_files/YYYY-MM-DD/...`
+- `~/.botwerk/workspace/api_files/YYYY-MM-DD/...`
 
 ## File safety model
 
@@ -100,9 +100,9 @@ Upload target:
 
 - `all` -> unrestricted
 - `home` -> home-root limited
-- `workspace` -> `~/.ductor/workspace` limited
+- `workspace` -> `~/.botwerk/workspace` limited
 
-MIME and file-tag parsing share helpers from `ductor_bot/files/`.
+MIME and file-tag parsing share helpers from `botwerk_bot/files/`.
 
 ## Error model
 

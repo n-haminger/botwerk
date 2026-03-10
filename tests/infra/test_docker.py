@@ -7,20 +7,20 @@ from unittest.mock import AsyncMock, patch
 
 import pytest
 
-from ductor_bot.config import DockerConfig
-from ductor_bot.workspace.paths import DuctorPaths
+from botwerk_bot.config import DockerConfig
+from botwerk_bot.workspace.paths import BotwerkPaths
 
 
 @pytest.fixture
-def docker_paths(tmp_path: Path) -> DuctorPaths:
-    home = tmp_path / ".ductor"
+def docker_paths(tmp_path: Path) -> BotwerkPaths:
+    home = tmp_path / ".botwerk"
     home.mkdir()
     ws = home / "workspace"
     ws.mkdir()
     (ws / "tools").mkdir()
     fw = tmp_path / "framework"
     fw.mkdir()
-    return DuctorPaths(ductor_home=home, home_defaults=fw / "workspace", framework_root=fw)
+    return BotwerkPaths(botwerk_home=home, home_defaults=fw / "workspace", framework_root=fw)
 
 
 @pytest.fixture
@@ -32,9 +32,9 @@ class TestDockerManager:
     """Test simplified Docker manager."""
 
     async def test_setup_returns_none_when_docker_not_found(
-        self, docker_config: DockerConfig, docker_paths: DuctorPaths
+        self, docker_config: DockerConfig, docker_paths: BotwerkPaths
     ) -> None:
-        from ductor_bot.infra.docker import DockerManager
+        from botwerk_bot.infra.docker import DockerManager
 
         mgr = DockerManager(docker_config, docker_paths)
         with patch("shutil.which", return_value=None):
@@ -44,10 +44,10 @@ class TestDockerManager:
     def test_init_handles_missing_stderr_for_pythonw(
         self,
         docker_config: DockerConfig,
-        docker_paths: DuctorPaths,
+        docker_paths: BotwerkPaths,
         monkeypatch: pytest.MonkeyPatch,
     ) -> None:
-        from ductor_bot.infra.docker import DockerManager
+        from botwerk_bot.infra.docker import DockerManager
 
         monkeypatch.setattr("sys.stderr", None)
 
@@ -56,9 +56,9 @@ class TestDockerManager:
         assert mgr._console is None
 
     async def test_setup_returns_none_when_daemon_unavailable(
-        self, docker_config: DockerConfig, docker_paths: DuctorPaths
+        self, docker_config: DockerConfig, docker_paths: BotwerkPaths
     ) -> None:
-        from ductor_bot.infra.docker import DockerManager
+        from botwerk_bot.infra.docker import DockerManager
 
         mgr = DockerManager(docker_config, docker_paths)
         with (
@@ -69,9 +69,9 @@ class TestDockerManager:
         assert result is None
 
     async def test_setup_returns_container_name_on_success(
-        self, docker_config: DockerConfig, docker_paths: DuctorPaths
+        self, docker_config: DockerConfig, docker_paths: BotwerkPaths
     ) -> None:
-        from ductor_bot.infra.docker import DockerManager
+        from botwerk_bot.infra.docker import DockerManager
 
         mgr = DockerManager(docker_config, docker_paths)
 
@@ -97,9 +97,9 @@ class TestDockerManager:
         assert result == "test-ctr"
 
     async def test_setup_builds_image_when_auto_build(
-        self, docker_config: DockerConfig, docker_paths: DuctorPaths
+        self, docker_config: DockerConfig, docker_paths: BotwerkPaths
     ) -> None:
-        from ductor_bot.infra.docker import DockerManager
+        from botwerk_bot.infra.docker import DockerManager
 
         docker_config.auto_build = True
         # Create Dockerfile.sandbox
@@ -135,9 +135,9 @@ class TestDockerManager:
         assert result == "test-ctr"
 
     async def test_setup_returns_none_when_auto_build_disabled(
-        self, docker_config: DockerConfig, docker_paths: DuctorPaths
+        self, docker_config: DockerConfig, docker_paths: BotwerkPaths
     ) -> None:
-        from ductor_bot.infra.docker import DockerManager
+        from botwerk_bot.infra.docker import DockerManager
 
         docker_config.auto_build = False
         mgr = DockerManager(docker_config, docker_paths)
@@ -158,9 +158,9 @@ class TestDockerManager:
         assert result is None
 
     async def test_teardown_stops_and_removes(
-        self, docker_config: DockerConfig, docker_paths: DuctorPaths
+        self, docker_config: DockerConfig, docker_paths: BotwerkPaths
     ) -> None:
-        from ductor_bot.infra.docker import DockerManager
+        from botwerk_bot.infra.docker import DockerManager
 
         mgr = DockerManager(docker_config, docker_paths)
         mgr._container = "test-ctr"
@@ -179,18 +179,18 @@ class TestDockerManager:
         assert any("rm" in c for c in exec_calls)
 
     async def test_teardown_noop_when_no_container(
-        self, docker_config: DockerConfig, docker_paths: DuctorPaths
+        self, docker_config: DockerConfig, docker_paths: BotwerkPaths
     ) -> None:
-        from ductor_bot.infra.docker import DockerManager
+        from botwerk_bot.infra.docker import DockerManager
 
         mgr = DockerManager(docker_config, docker_paths)
         assert mgr._container is None
         await mgr.teardown()  # Should not raise
 
     async def test_exec_returns_exit_code_and_output(
-        self, docker_config: DockerConfig, docker_paths: DuctorPaths
+        self, docker_config: DockerConfig, docker_paths: BotwerkPaths
     ) -> None:
-        from ductor_bot.infra.docker import DockerManager
+        from botwerk_bot.infra.docker import DockerManager
 
         mgr = DockerManager(docker_config, docker_paths)
         # Test the static method with a simple command
@@ -199,19 +199,19 @@ class TestDockerManager:
         assert "hello" in output
 
     async def test_exec_handles_timeout(
-        self, docker_config: DockerConfig, docker_paths: DuctorPaths
+        self, docker_config: DockerConfig, docker_paths: BotwerkPaths
     ) -> None:
-        from ductor_bot.infra.docker import DockerManager
+        from botwerk_bot.infra.docker import DockerManager
 
         mgr = DockerManager(docker_config, docker_paths)
         rc, _ = await mgr._exec("sleep", "10", deadline_seconds=0.1)
         assert rc != 0
 
-    async def test_mounts_full_ductor_home(
-        self, docker_config: DockerConfig, docker_paths: DuctorPaths
+    async def test_mounts_full_botwerk_home(
+        self, docker_config: DockerConfig, docker_paths: BotwerkPaths
     ) -> None:
-        """Verify run command mounts entire ~/.ductor, not just workspace."""
-        from ductor_bot.infra.docker import DockerManager
+        """Verify run command mounts entire ~/.botwerk, not just workspace."""
+        from botwerk_bot.infra.docker import DockerManager
 
         mgr = DockerManager(docker_config, docker_paths)
         run_args: list[str] = []
@@ -238,19 +238,19 @@ class TestDockerManager:
             await mgr.setup()
 
         run_str = " ".join(run_args)
-        # Full ductor_home mounted at /ductor
-        assert f"{docker_paths.ductor_home}:/ductor" in run_str
-        # Working dir is /ductor/workspace
-        assert "-w /ductor/workspace" in run_str
-        # DUCTOR_HOME env var set inside container
-        assert "DUCTOR_HOME=/ductor" in run_str
+        # Full botwerk_home mounted at /botwerk
+        assert f"{docker_paths.botwerk_home}:/botwerk" in run_str
+        # Working dir is /botwerk/workspace
+        assert "-w /botwerk/workspace" in run_str
+        # BOTWERK_HOME env var set inside container
+        assert "BOTWERK_HOME=/botwerk" in run_str
         # Template tools overlay should NOT be present
         assert "tools:ro" not in run_str
 
     async def test_ensure_running_returns_container_when_healthy(
-        self, docker_config: DockerConfig, docker_paths: DuctorPaths
+        self, docker_config: DockerConfig, docker_paths: BotwerkPaths
     ) -> None:
-        from ductor_bot.infra.docker import DockerManager
+        from botwerk_bot.infra.docker import DockerManager
 
         mgr = DockerManager(docker_config, docker_paths)
         mgr._container = "test-ctr"
@@ -260,9 +260,9 @@ class TestDockerManager:
         assert result == "test-ctr"
 
     async def test_ensure_running_recovers_stopped_container(
-        self, docker_config: DockerConfig, docker_paths: DuctorPaths
+        self, docker_config: DockerConfig, docker_paths: BotwerkPaths
     ) -> None:
-        from ductor_bot.infra.docker import DockerManager
+        from botwerk_bot.infra.docker import DockerManager
 
         mgr = DockerManager(docker_config, docker_paths)
         mgr._container = "test-ctr"
@@ -275,9 +275,9 @@ class TestDockerManager:
         assert result == "test-ctr"
 
     async def test_ensure_running_returns_none_on_recovery_failure(
-        self, docker_config: DockerConfig, docker_paths: DuctorPaths
+        self, docker_config: DockerConfig, docker_paths: BotwerkPaths
     ) -> None:
-        from ductor_bot.infra.docker import DockerManager
+        from botwerk_bot.infra.docker import DockerManager
 
         mgr = DockerManager(docker_config, docker_paths)
         mgr._container = "test-ctr"
@@ -290,9 +290,9 @@ class TestDockerManager:
         assert result is None
 
     async def test_ensure_running_calls_setup_when_no_container(
-        self, docker_config: DockerConfig, docker_paths: DuctorPaths
+        self, docker_config: DockerConfig, docker_paths: BotwerkPaths
     ) -> None:
-        from ductor_bot.infra.docker import DockerManager
+        from botwerk_bot.infra.docker import DockerManager
 
         mgr = DockerManager(docker_config, docker_paths)
         assert mgr._container is None
@@ -303,10 +303,10 @@ class TestDockerManager:
         mock.assert_awaited_once()
 
     async def test_uid_mapping_on_linux(
-        self, docker_config: DockerConfig, docker_paths: DuctorPaths
+        self, docker_config: DockerConfig, docker_paths: BotwerkPaths
     ) -> None:
         """Verify --user flag is added on Linux."""
-        from ductor_bot.infra.docker import DockerManager
+        from botwerk_bot.infra.docker import DockerManager
 
         mgr = DockerManager(docker_config, docker_paths)
         run_args: list[str] = []
@@ -329,7 +329,7 @@ class TestDockerManager:
         with (
             patch("shutil.which", return_value="/usr/bin/docker"),
             patch.object(mgr, "_exec", side_effect=mock_exec),
-            patch("ductor_bot.infra.docker._needs_uid_mapping", return_value=True),
+            patch("botwerk_bot.infra.docker._needs_uid_mapping", return_value=True),
             patch("os.getuid", return_value=1000),
             patch("os.getgid", return_value=1000),
         ):
@@ -339,10 +339,10 @@ class TestDockerManager:
         assert "--user 1000:1000" in run_str
 
     async def test_no_uid_mapping_on_macos(
-        self, docker_config: DockerConfig, docker_paths: DuctorPaths
+        self, docker_config: DockerConfig, docker_paths: BotwerkPaths
     ) -> None:
         """Verify --user flag is NOT added on macOS."""
-        from ductor_bot.infra.docker import DockerManager
+        from botwerk_bot.infra.docker import DockerManager
 
         mgr = DockerManager(docker_config, docker_paths)
         run_args: list[str] = []
@@ -365,7 +365,7 @@ class TestDockerManager:
         with (
             patch("shutil.which", return_value="/usr/bin/docker"),
             patch.object(mgr, "_exec", side_effect=mock_exec),
-            patch("ductor_bot.infra.docker._needs_uid_mapping", return_value=False),
+            patch("botwerk_bot.infra.docker._needs_uid_mapping", return_value=False),
         ):
             await mgr.setup()
 
@@ -373,30 +373,30 @@ class TestDockerManager:
         assert "--user" not in run_str
 
     async def test_container_property(
-        self, docker_config: DockerConfig, docker_paths: DuctorPaths
+        self, docker_config: DockerConfig, docker_paths: BotwerkPaths
     ) -> None:
-        from ductor_bot.infra.docker import DockerManager
+        from botwerk_bot.infra.docker import DockerManager
 
         mgr = DockerManager(docker_config, docker_paths)
         assert mgr.container is None
         mgr._container = "x"
         assert mgr.container == "x"
 
-    async def test_sub_agent_mounts_root_ductor_home(
+    async def test_sub_agent_mounts_root_botwerk_home(
         self, docker_config: DockerConfig, tmp_path: Path
     ) -> None:
-        """Sub-agent container mounts ~/.ductor (root), not ~/.ductor/agents/test."""
-        from ductor_bot.infra.docker import DockerManager
+        """Sub-agent container mounts ~/.botwerk (root), not ~/.botwerk/agents/test."""
+        from botwerk_bot.infra.docker import DockerManager
 
-        root_home = tmp_path / ".ductor"
+        root_home = tmp_path / ".botwerk"
         agent_home = root_home / "agents" / "test"
         agent_ws = agent_home / "workspace"
         for d in (root_home, agent_home, agent_ws, agent_ws / "tools"):
             d.mkdir(parents=True, exist_ok=True)
         fw = tmp_path / "framework"
         fw.mkdir()
-        paths = DuctorPaths(
-            ductor_home=agent_home, home_defaults=fw / "workspace", framework_root=fw
+        paths = BotwerkPaths(
+            botwerk_home=agent_home, home_defaults=fw / "workspace", framework_root=fw
         )
         mgr = DockerManager(docker_config, paths)
         run_args: list[str] = []
@@ -419,22 +419,22 @@ class TestDockerManager:
         with (
             patch("shutil.which", return_value="/usr/bin/docker"),
             patch.object(mgr, "_exec", side_effect=mock_exec),
-            patch("ductor_bot.infra.docker._needs_uid_mapping", return_value=False),
+            patch("botwerk_bot.infra.docker._needs_uid_mapping", return_value=False),
         ):
             await mgr.setup()
 
         run_str = " ".join(run_args)
         # Must mount root home, not sub-agent home
-        assert f"{root_home}:/ductor" in run_str
-        assert f"{agent_home}:/ductor" not in run_str
+        assert f"{root_home}:/botwerk" in run_str
+        assert f"{agent_home}:/botwerk" not in run_str
 
     async def test_setup_lock_serialises_concurrent_calls(
-        self, docker_config: DockerConfig, docker_paths: DuctorPaths
+        self, docker_config: DockerConfig, docker_paths: BotwerkPaths
     ) -> None:
         """Second concurrent setup() reuses the container created by the first."""
         import asyncio
 
-        from ductor_bot.infra.docker import DockerManager
+        from botwerk_bot.infra.docker import DockerManager
 
         mgr1 = DockerManager(docker_config, docker_paths)
         mgr2 = DockerManager(docker_config, docker_paths)

@@ -9,23 +9,23 @@ from unittest.mock import patch
 
 import time_machine
 
-from ductor_bot.cli.codex_cache import CodexModelCache
-from ductor_bot.cli.param_resolver import TaskOverrides
-from ductor_bot.config import AgentConfig, HeartbeatConfig, WebhookConfig
-from ductor_bot.webhook.manager import WebhookManager
-from ductor_bot.webhook.models import WebhookEntry
-from ductor_bot.webhook.observer import WebhookObserver
-from ductor_bot.workspace.paths import DuctorPaths
+from botwerk_bot.cli.codex_cache import CodexModelCache
+from botwerk_bot.cli.param_resolver import TaskOverrides
+from botwerk_bot.config import AgentConfig, HeartbeatConfig, WebhookConfig
+from botwerk_bot.webhook.manager import WebhookManager
+from botwerk_bot.webhook.models import WebhookEntry
+from botwerk_bot.webhook.observer import WebhookObserver
+from botwerk_bot.workspace.paths import BotwerkPaths
 
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------
 
 
-def _make_paths(tmp_path: Path) -> DuctorPaths:
+def _make_paths(tmp_path: Path) -> BotwerkPaths:
     fw = tmp_path / "fw"
-    paths = DuctorPaths(
-        ductor_home=tmp_path / "home",
+    paths = BotwerkPaths(
+        botwerk_home=tmp_path / "home",
         home_defaults=fw / "workspace",
         framework_root=fw,
     )
@@ -33,7 +33,7 @@ def _make_paths(tmp_path: Path) -> DuctorPaths:
     return paths
 
 
-def _make_manager(paths: DuctorPaths) -> WebhookManager:
+def _make_manager(paths: BotwerkPaths) -> WebhookManager:
     return WebhookManager(hooks_path=paths.webhooks_path)
 
 
@@ -50,7 +50,7 @@ def _make_codex_cache() -> CodexModelCache:
 
 
 def _make_observer(
-    paths: DuctorPaths,
+    paths: BotwerkPaths,
     mgr: WebhookManager,
     **config_overrides: Any,
 ) -> WebhookObserver:
@@ -62,7 +62,7 @@ def _make_observer(
     )
 
 
-def _add_hook(mgr: WebhookManager, paths: DuctorPaths, **overrides: Any) -> WebhookEntry:
+def _add_hook(mgr: WebhookManager, paths: BotwerkPaths, **overrides: Any) -> WebhookEntry:
     defaults: dict[str, Any] = {
         "id": "test-hook",
         "title": "Test Hook",
@@ -102,7 +102,7 @@ async def test_webhook_ignores_heartbeat_quiet_hours(tmp_path: Path) -> None:
     )
     _add_hook(mgr, paths)
 
-    with patch("ductor_bot.cron.execution.build_cmd", return_value=None):
+    with patch("botwerk_bot.cron.execution.build_cmd", return_value=None):
         result = await obs._dispatch_cron_task(
             "test-hook",
             "Test Hook",
@@ -130,7 +130,7 @@ async def test_webhook_runs_during_active_hours(tmp_path: Path) -> None:
     )
     _add_hook(mgr, paths)
 
-    with patch("ductor_bot.cron.execution.build_cmd", return_value=None):
+    with patch("botwerk_bot.cron.execution.build_cmd", return_value=None):
         result = await obs._dispatch_cron_task(
             "test-hook",
             "Test Hook",

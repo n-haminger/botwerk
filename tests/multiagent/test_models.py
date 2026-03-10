@@ -4,8 +4,8 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from ductor_bot.config import AgentConfig, ApiConfig
-from ductor_bot.multiagent.models import SubAgentConfig, merge_sub_agent_config
+from botwerk_bot.config import AgentConfig, ApiConfig
+from botwerk_bot.multiagent.models import SubAgentConfig, merge_sub_agent_config
 
 
 class TestSubAgentConfig:
@@ -48,7 +48,7 @@ class TestMergeSubAgentConfig:
             provider="claude",
             model="opus",
             allowed_user_ids=[1, 2, 3],
-            ductor_home="/main/home",
+            botwerk_home="/main/home",
             cli_timeout=600,
             telegram_token="main-token",
         )
@@ -79,13 +79,13 @@ class TestMergeSubAgentConfig:
         assert result.model == "gpt-4"
         assert result.cli_timeout == 300
 
-    def test_ductor_home_always_set_to_agent_home(self) -> None:
-        """ductor_home is always the agent's home dir, not main's."""
+    def test_botwerk_home_always_set_to_agent_home(self) -> None:
+        """botwerk_home is always the agent's home dir, not main's."""
         main = self._main_config()
         sub = SubAgentConfig(name="sub1", telegram_token="sub-token")
         result = merge_sub_agent_config(main, sub, Path("/agents/sub1"))
 
-        assert result.ductor_home == "/agents/sub1"
+        assert result.botwerk_home == "/agents/sub1"
 
     def test_telegram_token_always_from_sub(self) -> None:
         """Telegram token always comes from sub-agent definition."""
@@ -191,7 +191,7 @@ class TestMergeSubAgentConfig:
         assert result.api.port == 8742
 
     def test_linux_user_derived_from_name(self) -> None:
-        """linux_user=True in SubAgentConfig becomes 'ductor-<name>' in AgentConfig."""
+        """linux_user=True in SubAgentConfig becomes 'botwerk-<name>' in AgentConfig."""
         main = self._main_config()
         sub = SubAgentConfig(
             name="codex",
@@ -199,7 +199,7 @@ class TestMergeSubAgentConfig:
             linux_user=True,
         )
         result = merge_sub_agent_config(main, sub, Path("/agents/codex"))
-        assert result.linux_user == "ductor-codex"
+        assert result.linux_user == "botwerk-codex"
 
     def test_linux_user_not_set_by_default(self) -> None:
         """linux_user is empty by default."""

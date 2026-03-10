@@ -1,22 +1,22 @@
 # Configuration
 
-Runtime config file: `~/.ductor/config/config.json`.
+Runtime config file: `~/.botwerk/config/config.json`.
 
-Seed source: `<repo>/config.example.json` (source checkout) or packaged fallback `ductor_bot/_config_example.json` (installed mode).
+Seed source: `<repo>/config.example.json` (source checkout) or packaged fallback `botwerk_bot/_config_example.json` (installed mode).
 
 ## Config Creation
 
-Primary path: `ductor onboarding` (interactive wizard) writes `config.json` with user-provided values merged into `AgentConfig` defaults.
+Primary path: `botwerk onboarding` (interactive wizard) writes `config.json` with user-provided values merged into `AgentConfig` defaults.
 
 ## Load & Merge Behavior
 
 Config is merged in two places:
 
-1. `ductor_bot/__main__.py::load_config()`
+1. `botwerk_bot/__main__.py::load_config()`
    - creates config on first start (copy from `config.example.json` or Pydantic defaults),
    - deep-merges runtime file with `AgentConfig` defaults,
    - writes back only when new keys were added.
-2. `ductor_bot/workspace/init.py::_smart_merge_config()`
+2. `botwerk_bot/workspace/init.py::_smart_merge_config()`
    - shallow merge `{**defaults, **existing}` with `config.example.json`,
    - preserves existing user top-level keys,
    - fills missing top-level keys from `config.example.json`.
@@ -31,9 +31,9 @@ Runtime edits persisted through config helpers include `/model` changes (model/p
 API config persistence note:
 
 - `load_config()` intentionally does not auto-add the `api` block during default deep-merge (beta gating).
-- `ductor api enable` writes the `api` block (including generated token) into `config.json`.
+- `botwerk api enable` writes the `api` block (including generated token) into `config.json`.
 
-## External API Secrets (`~/.ductor/.env`)
+## External API Secrets (`~/.botwerk/.env`)
 
 User-defined environment secrets for external APIs (e.g. `PPLX_API_KEY`, `DEEPSEEK_API_KEY`).
 
@@ -60,14 +60,14 @@ Priority (highest to lowest):
 
 Changes take effect on the next CLI invocation (mtime-based cache invalidation, no restart needed).
 
-## `AgentConfig` (`ductor_bot/config.py`)
+## `AgentConfig` (`botwerk_bot/config.py`)
 
 | Field | Type | Default | Notes |
 |---|---|---|---|
 | `log_level` | `str` | `"INFO"` | Applied at startup unless CLI `--verbose` is used |
 | `provider` | `str` | `"claude"` | Default provider |
 | `model` | `str` | `"opus"` | Default model ID |
-| `ductor_home` | `str` | `"~/.ductor"` | Runtime home root |
+| `botwerk_home` | `str` | `"~/.botwerk"` | Runtime home root |
 | `idle_timeout_minutes` | `int` | `1440` | Session freshness idle timeout (`0` disables idle expiry) |
 | `session_age_warning_hours` | `int` | `12` | Adds `/new` reminder after threshold (every 10 messages) |
 | `daily_reset_hour` | `int` | `4` | Daily reset boundary hour in `user_timezone` |
@@ -102,13 +102,13 @@ Changes take effect on the next CLI invocation (mtime-based cache invalidation, 
 | Field | Type | Default | Notes |
 |---|---|---|---|
 | `homeserver` | `str` | `""` | Matrix homeserver URL (e.g. `https://matrix.org`) |
-| `user_id` | `str` | `""` | Bot user ID (e.g. `@ductor:matrix.org`) |
+| `user_id` | `str` | `""` | Bot user ID (e.g. `@botwerk:matrix.org`) |
 | `password` | `str` | `""` | Password for initial login |
 | `access_token` | `str` | `""` | Persisted after first login (auto-managed) |
 | `device_id` | `str` | `""` | Persisted after first login (auto-managed) |
 | `allowed_rooms` | `list[str]` | `[]` | Room IDs or aliases the bot may operate in |
 | `allowed_users` | `list[str]` | `[]` | Matrix user IDs allowed to interact |
-| `store_path` | `str` | `"matrix_store"` | E2EE key store directory, relative to `ductor_home` |
+| `store_path` | `str` | `"matrix_store"` | E2EE key store directory, relative to `botwerk_home` |
 
 Notes:
 
@@ -176,8 +176,8 @@ Implementation status note:
 
 Stored outside `config.json` in:
 
-- `~/.ductor/cron_jobs.json` (`CronJob`)
-- `~/.ductor/webhooks.json` (`WebhookEntry`, `cron_task` mode)
+- `~/.botwerk/cron_jobs.json` (`CronJob`)
+- `~/.botwerk/webhooks.json` (`WebhookEntry`, `cron_task` mode)
 
 Common per-task fields:
 
@@ -212,14 +212,14 @@ Behavior notes:
 | Field | Type | Default | Notes |
 |---|---|---|---|
 | `enabled` | `bool` | `false` | Master toggle |
-| `image_name` | `str` | `"ductor-sandbox"` | Docker image name |
-| `container_name` | `str` | `"ductor-sandbox"` | Docker container name |
+| `image_name` | `str` | `"botwerk-sandbox"` | Docker image name |
+| `container_name` | `str` | `"botwerk-sandbox"` | Docker container name |
 | `auto_build` | `bool` | `true` | Build image automatically when missing |
 | `mount_host_cache` | `bool` | `false` | Mount host `~/.cache` into container (see below) |
 | `mounts` | `list[str]` | `[]` | Extra host directories mounted into sandbox (`/mnt/...`) |
 | `extras` | `list[str]` | `[]` | Optional AI/ML package IDs to install in the Docker image (see below) |
 
-`Orchestrator.create()` calls `DockerManager.setup()` when enabled. If setup fails, ductor logs warning and falls back to host execution.
+`Orchestrator.create()` calls `DockerManager.setup()` when enabled. If setup fails, botwerk logs warning and falls back to host execution.
 
 ### `mount_host_cache`
 
@@ -246,12 +246,12 @@ User-defined directory mounts for project/data access inside Docker sandbox.
 
 Runtime note:
 
-- updates are typically managed via `ductor docker mount|unmount`
-- changing mounts requires bot restart (or `ductor docker rebuild`) to affect container run flags
+- updates are typically managed via `botwerk docker mount|unmount`
+- changing mounts requires bot restart (or `botwerk docker rebuild`) to affect container run flags
 
 ### `extras`
 
-Optional AI/ML packages installed into the Docker sandbox image at build time. Each entry is an ID from the extras registry (`ductor_bot/infra/docker_extras.py`).
+Optional AI/ML packages installed into the Docker sandbox image at build time. Each entry is an ID from the extras registry (`botwerk_bot/infra/docker_extras.py`).
 
 Available extras:
 
@@ -277,7 +277,7 @@ Dependency resolution:
 - `easyocr` and `transformers` depend on `pytorch-cpu`
 - dependencies are auto-resolved at build time
 
-Managed via `ductor docker extras-add|extras-remove` or during onboarding wizard. Changes require `ductor docker rebuild` to take effect.
+Managed via `botwerk docker extras-add|extras-remove` or during onboarding wizard. Changes require `botwerk docker rebuild` to take effect.
 
 When extras are configured, the supervisor startup timeout is dynamically extended to accommodate longer Docker build times.
 
@@ -327,7 +327,7 @@ Cleanup implementation detail:
 | `enabled` | `bool` | `false` | Master toggle |
 | `host` | `str` | `"0.0.0.0"` | Bind address |
 | `port` | `int` | `8741` | API HTTP/WebSocket port |
-| `token` | `str` | `""` | Bearer/WebSocket auth token (generated by `ductor api enable`, with runtime generation fallback on API start) |
+| `token` | `str` | `""` | Bearer/WebSocket auth token (generated by `botwerk api enable`, with runtime generation fallback on API start) |
 | `chat_id` | `int` | `0` | Default API session chat (`0` means fallback to first `allowed_user_ids` entry, else `1`) |
 | `allow_public` | `bool` | `false` | Suppresses Tailscale-not-detected warning |
 
@@ -364,13 +364,13 @@ Restart-required top-level fields:
 
 - `transport`, `telegram_token`, `matrix`
 - `docker`, `api`, `webhooks`
-- `ductor_home`, `log_level`, `gemini_api_key`, `timeouts`, `tasks`
+- `botwerk_home`, `log_level`, `gemini_api_key`, `timeouts`, `tasks`
 
 Restart classification is computed from `AgentConfig` top-level schema fields.
 
 ## Model Resolution
 
-`ModelRegistry` (`ductor_bot/config.py`):
+`ModelRegistry` (`botwerk_bot/config.py`):
 
 - Claude models are hardcoded: `haiku`, `sonnet`, `opus`.
 - Gemini aliases are hardcoded: `auto`, `pro`, `flash`, `flash-lite`.
@@ -382,7 +382,7 @@ Restart classification is computed from `AgentConfig` top-level schema fields.
 
 ## Timezone Resolution
 
-`resolve_user_timezone(configured)` in `ductor_bot/config.py`:
+`resolve_user_timezone(configured)` in `botwerk_bot/config.py`:
 
 1. valid configured IANA timezone,
 2. `$TZ` env var,
@@ -407,7 +407,7 @@ Automation flow:
 
 ## Codex Model Cache
 
-Path: `~/.ductor/config/codex_models.json`.
+Path: `~/.botwerk/config/codex_models.json`.
 
 Behavior:
 
@@ -419,7 +419,7 @@ Behavior:
 
 ## Gemini Model Cache
 
-Path: `~/.ductor/config/gemini_models.json`.
+Path: `~/.botwerk/config/gemini_models.json`.
 
 Behavior:
 
@@ -430,14 +430,14 @@ Behavior:
 
 ## `agents.json` (Multi-Agent Registry)
 
-Path: `~/.ductor/agents.json`.
+Path: `~/.botwerk/agents.json`.
 
 Top-level JSON array of `SubAgentConfig` objects. Each entry defines a sub-agent that runs alongside the main agent.
 
 Managed via:
 
-- `ductor agents add <name>` (interactive CLI)
-- `ductor agents remove <name>` (CLI)
+- `botwerk agents add <name>` (interactive CLI)
+- `botwerk agents remove <name>` (CLI)
 - `create_agent.py` / `remove_agent.py` tool scripts (from within a CLI session)
 - manual file editing (auto-detected by `FileWatcher`)
 
@@ -473,7 +473,7 @@ Managed via:
 | `api` | `ApiConfig` | no | disabled | Disabled by default for sub-agents |
 | `cli_parameters` | `CLIParametersConfig` | no | inherited | |
 | `user_timezone` | `str` | no | inherited | |
-| `linux_user` | `bool` | no | `false` | Run CLI as dedicated Linux user (`ductor-<name>`) |
+| `linux_user` | `bool` | no | `false` | Run CLI as dedicated Linux user (`botwerk-<name>`) |
 
 "inherited" means the value comes from the main agent's `config.json` when omitted.
 
@@ -520,7 +520,7 @@ Example:
 
 Then it always forces:
 
-- `ductor_home = ~/.ductor/agents/<name>/`
+- `botwerk_home = ~/.botwerk/agents/<name>/`
 - `transport`, `telegram_token`, `matrix`, `allowed_user_ids`, and `allowed_group_ids` from the sub-agent entry
 - `api.enabled = false` when no explicit `api` block is provided
 
@@ -542,28 +542,28 @@ For non-token field updates on a running agent, use `/agent_restart <name>` (or 
 
 ### Linux user isolation
 
-When `"linux_user": true` is set in a sub-agent's `agents.json` entry, CLI subprocesses (claude/codex/gemini) run as a dedicated Linux user `ductor-<name>` via `sudo -u`. This provides file-level access isolation between agents.
+When `"linux_user": true` is set in a sub-agent's `agents.json` entry, CLI subprocesses (claude/codex/gemini) run as a dedicated Linux user `botwerk-<name>` via `sudo -u`. This provides file-level access isolation between agents.
 
 **How it works:**
 
 1. On agent startup, `AgentSupervisor` calls the provisioning script (`scripts/manage-agent-user.sh`) via sudo to create the Linux user.
-2. The user is a system account (`--system --shell /usr/sbin/nologin`) in the `ductor` group.
+2. The user is a system account (`--system --shell /usr/sbin/nologin`) in the `botwerk` group.
 3. Claude Code credentials are symlinked from the main user's `~/.claude/` (directory traversal permissions are set automatically).
-4. The agent's workspace remains owned by the ductor service user; the agent user gets ACL-based `rwX` access via `fix-perms`.
+4. The agent's workspace remains owned by the botwerk service user; the agent user gets ACL-based `rwX` access via `fix-perms`.
 5. Claude CLI is made globally accessible via symlink (`/usr/local/bin/claude` → user-local install) with default ACLs on the versions directory so auto-updates work without restarts.
-6. CLI commands are wrapped with `sudo -Hnu ductor-<name> --preserve-env=... --` (HOME is set to the agent user's home so Claude finds its credentials).
+6. CLI commands are wrapped with `sudo -Hnu botwerk-<name> --preserve-env=... --` (HOME is set to the agent user's home so Claude finds its credentials).
 
 **Setup prerequisites:**
 
 One-time root setup — this is the only manual step per installation:
 
 ```
-# /etc/sudoers.d/ductor-agents
-<service_user> ALL=(root) NOPASSWD: /opt/ductor/scripts/manage-agent-user.sh
+# /etc/sudoers.d/botwerk-agents
+<service_user> ALL=(root) NOPASSWD: /opt/botwerk/scripts/manage-agent-user.sh
 ```
 
 The provisioning script handles everything else automatically:
-- Creates the Linux user and `ductor` group
+- Creates the Linux user and `botwerk` group
 - Symlinks Claude credentials and sets directory traversal permissions
 - Installs Claude CLI globally (symlink + default ACLs for auto-updates)
 - Writes per-agent sudoers entries for CLI execution

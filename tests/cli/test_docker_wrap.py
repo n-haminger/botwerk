@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from pathlib import PureWindowsPath
 
-from ductor_bot.cli.base import CLIConfig, docker_wrap
+from botwerk_bot.cli.base import CLIConfig, docker_wrap
 
 
 def test_docker_wrap_without_container() -> None:
@@ -23,19 +23,19 @@ def test_docker_wrap_with_container() -> None:
         "docker",
         "exec",
         "-w",
-        "/ductor/workspace",
+        "/botwerk/workspace",
         "-e",
-        "DUCTOR_CHAT_ID=42",
+        "BOTWERK_CHAT_ID=42",
         "-e",
-        "DUCTOR_AGENT_NAME=main",
+        "BOTWERK_AGENT_NAME=main",
         "-e",
-        "DUCTOR_INTERAGENT_PORT=8799",
+        "BOTWERK_INTERAGENT_PORT=8799",
         "-e",
-        "DUCTOR_HOME=/ductor",
+        "BOTWERK_HOME=/botwerk",
         "-e",
-        "DUCTOR_SHARED_MEMORY_PATH=/ductor/SHAREDMEMORY.md",
+        "BOTWERK_SHARED_MEMORY_PATH=/botwerk/SHAREDMEMORY.md",
         "-e",
-        "DUCTOR_INTERAGENT_HOST=host.docker.internal",
+        "BOTWERK_INTERAGENT_HOST=host.docker.internal",
         "my-sandbox",
         "claude",
         "-p",
@@ -53,19 +53,19 @@ def test_docker_wrap_interactive() -> None:
         "exec",
         "-i",
         "-w",
-        "/ductor/workspace",
+        "/botwerk/workspace",
         "-e",
-        "DUCTOR_CHAT_ID=42",
+        "BOTWERK_CHAT_ID=42",
         "-e",
-        "DUCTOR_AGENT_NAME=main",
+        "BOTWERK_AGENT_NAME=main",
         "-e",
-        "DUCTOR_INTERAGENT_PORT=8799",
+        "BOTWERK_INTERAGENT_PORT=8799",
         "-e",
-        "DUCTOR_HOME=/ductor",
+        "BOTWERK_HOME=/botwerk",
         "-e",
-        "DUCTOR_SHARED_MEMORY_PATH=/ductor/SHAREDMEMORY.md",
+        "BOTWERK_SHARED_MEMORY_PATH=/botwerk/SHAREDMEMORY.md",
         "-e",
-        "DUCTOR_INTERAGENT_HOST=host.docker.internal",
+        "BOTWERK_INTERAGENT_HOST=host.docker.internal",
         "my-sandbox",
         "gemini",
         "--output-format",
@@ -85,7 +85,7 @@ def test_docker_wrap_injects_chat_id() -> None:
     cmd = ["codex", "exec"]
     cfg = CLIConfig(docker_container="box", chat_id=999, working_dir="/w")
     result_cmd, _ = docker_wrap(cmd, cfg)
-    assert "DUCTOR_CHAT_ID=999" in result_cmd
+    assert "BOTWERK_CHAT_ID=999" in result_cmd
 
 
 def test_docker_wrap_extra_env() -> None:
@@ -100,39 +100,39 @@ def test_docker_wrap_extra_env() -> None:
 
 
 def test_docker_wrap_sub_agent_container_paths() -> None:
-    """Sub-agent working_dir maps to /ductor/agents/<name>/workspace inside container."""
+    """Sub-agent working_dir maps to /botwerk/agents/<name>/workspace inside container."""
     cmd = ["claude", "-p", "hi"]
     cfg = CLIConfig(
         docker_container="sandbox",
         chat_id=1,
-        working_dir="/home/user/.ductor/agents/test/workspace",
+        working_dir="/home/user/.botwerk/agents/test/workspace",
         agent_name="test",
     )
     result_cmd, cwd = docker_wrap(cmd, cfg)
     assert cwd is None
     # -w sets correct sub-agent workspace
     w_idx = result_cmd.index("-w")
-    assert result_cmd[w_idx + 1] == "/ductor/agents/test/workspace"
-    # DUCTOR_HOME is the sub-agent home inside the container
-    assert "DUCTOR_HOME=/ductor/agents/test" in result_cmd
+    assert result_cmd[w_idx + 1] == "/botwerk/agents/test/workspace"
+    # BOTWERK_HOME is the sub-agent home inside the container
+    assert "BOTWERK_HOME=/botwerk/agents/test" in result_cmd
     # Shared memory is at the root
-    assert "DUCTOR_SHARED_MEMORY_PATH=/ductor/SHAREDMEMORY.md" in result_cmd
+    assert "BOTWERK_SHARED_MEMORY_PATH=/botwerk/SHAREDMEMORY.md" in result_cmd
 
 
 def test_docker_wrap_main_agent_container_paths() -> None:
-    """Main agent working_dir maps to /ductor/workspace inside container."""
+    """Main agent working_dir maps to /botwerk/workspace inside container."""
     cmd = ["claude", "-p", "hi"]
     cfg = CLIConfig(
         docker_container="sandbox",
         chat_id=1,
-        working_dir="/home/user/.ductor/workspace",
+        working_dir="/home/user/.botwerk/workspace",
         agent_name="main",
     )
     result_cmd, _ = docker_wrap(cmd, cfg)
     w_idx = result_cmd.index("-w")
-    assert result_cmd[w_idx + 1] == "/ductor/workspace"
-    assert "DUCTOR_HOME=/ductor" in result_cmd
-    assert "DUCTOR_SHARED_MEMORY_PATH=/ductor/SHAREDMEMORY.md" in result_cmd
+    assert result_cmd[w_idx + 1] == "/botwerk/workspace"
+    assert "BOTWERK_HOME=/botwerk" in result_cmd
+    assert "BOTWERK_SHARED_MEMORY_PATH=/botwerk/SHAREDMEMORY.md" in result_cmd
 
 
 def test_docker_wrap_sub_agent_windows_paths_are_posix() -> None:
@@ -141,10 +141,10 @@ def test_docker_wrap_sub_agent_windows_paths_are_posix() -> None:
     cfg = CLIConfig(
         docker_container="sandbox",
         chat_id=1,
-        working_dir=PureWindowsPath(r"C:\Users\me\.ductor\agents\seismic-bot\workspace"),
+        working_dir=PureWindowsPath(r"C:\Users\me\.botwerk\agents\seismic-bot\workspace"),
         agent_name="seismic-bot",
     )
     result_cmd, _ = docker_wrap(cmd, cfg, interactive=True)
     w_idx = result_cmd.index("-w")
-    assert result_cmd[w_idx + 1] == "/ductor/agents/seismic-bot/workspace"
-    assert "DUCTOR_HOME=/ductor/agents/seismic-bot" in result_cmd
+    assert result_cmd[w_idx + 1] == "/botwerk/agents/seismic-bot/workspace"
+    assert "BOTWERK_HOME=/botwerk/agents/seismic-bot" in result_cmd

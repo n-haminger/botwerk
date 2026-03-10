@@ -7,9 +7,9 @@ from unittest.mock import AsyncMock, MagicMock
 import pytest
 from aiohttp.test_utils import TestClient
 
-from ductor_bot.multiagent.bus import InterAgentBus
-from ductor_bot.multiagent.health import AgentHealth
-from ductor_bot.multiagent.internal_api import InternalAgentAPI
+from botwerk_bot.multiagent.bus import InterAgentBus
+from botwerk_bot.multiagent.health import AgentHealth
+from botwerk_bot.multiagent.internal_api import InternalAgentAPI
 
 
 @pytest.fixture

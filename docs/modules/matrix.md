@@ -70,7 +70,7 @@ Same command set as Telegram, with `!` or `/` prefix:
 
 ## Setup
 
-Matrix can be configured via the interactive setup wizard (`ductor onboarding`) or manually in `config.json`.
+Matrix can be configured via the interactive setup wizard (`botwerk onboarding`) or manually in `config.json`.
 
 The wizard prompts for: homeserver URL, bot user ID, password, and allowed users. See [setup_wizard.md](setup_wizard.md).
 

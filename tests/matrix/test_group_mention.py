@@ -8,7 +8,7 @@ from typing import Any
 
 import pytest
 
-from ductor_bot.matrix.bot import MatrixBot
+from botwerk_bot.matrix.bot import MatrixBot
 
 
 # ---------------------------------------------------------------------------

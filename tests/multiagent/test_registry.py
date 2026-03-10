@@ -7,8 +7,8 @@ from pathlib import Path
 
 import pytest
 
-from ductor_bot.multiagent.models import SubAgentConfig
-from ductor_bot.multiagent.registry import AgentRegistry
+from botwerk_bot.multiagent.models import SubAgentConfig
+from botwerk_bot.multiagent.registry import AgentRegistry
 
 
 @pytest.fixture

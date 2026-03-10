@@ -8,8 +8,8 @@ from typing import Any
 
 import pytest
 
-from ductor_bot.webhook.manager import WebhookManager
-from ductor_bot.webhook.models import WebhookEntry
+from botwerk_bot.webhook.manager import WebhookManager
+from botwerk_bot.webhook.models import WebhookEntry
 
 
 def _make_manager(tmp_path: Path) -> WebhookManager:
