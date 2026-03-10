@@ -6,19 +6,19 @@ from pathlib import Path
 
 import pytest
 
-from ductor_bot.workspace.cron_tasks import (
+from botwerk_bot.workspace.cron_tasks import (
     create_cron_task,
     delete_cron_task,
     ensure_task_rule_files,
     list_cron_tasks,
 )
-from ductor_bot.workspace.paths import DuctorPaths
+from botwerk_bot.workspace.paths import BotwerkPaths
 
 
-def _make_paths(tmp_path: Path) -> DuctorPaths:
+def _make_paths(tmp_path: Path) -> BotwerkPaths:
     fw = tmp_path / "fw"
-    paths = DuctorPaths(
-        ductor_home=tmp_path / "home", home_defaults=fw / "workspace", framework_root=fw
+    paths = BotwerkPaths(
+        botwerk_home=tmp_path / "home", home_defaults=fw / "workspace", framework_root=fw
     )
     paths.cron_tasks_dir.mkdir(parents=True)
     return paths

@@ -2,7 +2,7 @@ This file gives coding agents a current map of the repository.
 
 ## Project Overview
 
-ductor is a Telegram bot that routes chat input to official provider CLIs (`claude`, `codex`, `gemini`), streams responses back to Telegram, persists per-chat state, and runs cron/webhook/heartbeat automation in-process.
+botwerk is a Telegram bot that routes chat input to official provider CLIs (`claude`, `codex`, `gemini`), streams responses back to Telegram, persists per-chat state, and runs cron/webhook/heartbeat automation in-process.
 
 Stack:
 
@@ -19,8 +19,8 @@ python -m venv .venv && source .venv/bin/activate
 pip install -e ".[dev]"
 
 # Run
-ductor
-ductor -v
+botwerk
+botwerk -v
 
 # Tests
 pytest
@@ -30,7 +30,7 @@ pytest -k "pattern"
 # Quality
 ruff format .
 ruff check .
-mypy ductor_bot
+mypy botwerk_bot
 ```
 
 ## Runtime Flow
@@ -64,15 +64,15 @@ Telegram Update
 
 ## Key Runtime Patterns
 
-- `DuctorPaths` (`workspace/paths.py`) is the single source of truth for paths.
+- `BotwerkPaths` (`workspace/paths.py`) is the single source of truth for paths.
 - Workspace init is zone-based:
   - Zone 2 overwrite: `CLAUDE.md`, `AGENTS.md`, `GEMINI.md`, and framework cron/webhook tool scripts.
   - Zone 3 seed-once for user-owned files.
 - Rules are selected from `RULES*.md` variants and deployed per authenticated provider.
 - Rule sync updates existing `CLAUDE.md`, `AGENTS.md`, `GEMINI.md` siblings recursively by mtime.
-- Skill sync spans `~/.ductor/workspace/skills`, `~/.claude/skills`, `~/.codex/skills`, `~/.gemini/skills`.
+- Skill sync spans `~/.botwerk/workspace/skills`, `~/.claude/skills`, `~/.codex/skills`, `~/.gemini/skills`.
   - normal mode: links
-  - Docker mode: managed copies (`.ductor_managed` marker)
+  - Docker mode: managed copies (`.botwerk_managed` marker)
 - Streaming fallback is automatic; `/stop` abort checks are enforced during event loop processing.
 - Session state is provider-isolated; `/new` resets only the active provider bucket.
 
@@ -97,26 +97,26 @@ All run as in-process asyncio tasks:
 - macOS: launchd Launch Agent
 - Windows: Task Scheduler
 
-`ductor service logs` behavior:
+`botwerk service logs` behavior:
 
-- Linux: `journalctl --user -u ductor -f`
-- macOS/Windows: recent lines from `~/.ductor/logs/agent.log` (fallback newest `*.log`)
+- Linux: `journalctl --user -u botwerk -f`
+- macOS/Windows: recent lines from `~/.botwerk/logs/agent.log` (fallback newest `*.log`)
 
 ## CLI Commands
 
 | Command | Effect |
 |---|---|
-| `ductor` | Start bot (runs onboarding if needed) |
-| `ductor stop` | Stop bot and Docker container |
-| `ductor restart` | Restart bot |
-| `ductor upgrade` | Stop, upgrade, restart |
-| `ductor docker rebuild` | Stop bot, remove container & image, rebuilt on next start |
-| `ductor docker enable` | Set `docker.enabled = true` |
-| `ductor docker disable` | Stop container, set `docker.enabled = false` |
-| `ductor service install` | Install as background service |
-| `ductor service [sub]` | Service management (status/stop/logs/...) |
+| `botwerk` | Start bot (runs onboarding if needed) |
+| `botwerk stop` | Stop bot and Docker container |
+| `botwerk restart` | Restart bot |
+| `botwerk upgrade` | Stop, upgrade, restart |
+| `botwerk docker rebuild` | Stop bot, remove container & image, rebuilt on next start |
+| `botwerk docker enable` | Set `docker.enabled = true` |
+| `botwerk docker disable` | Stop container, set `docker.enabled = false` |
+| `botwerk service install` | Install as background service |
+| `botwerk service [sub]` | Service management (status/stop/logs/...) |
 
-## Data Files (`~/.ductor`)
+## Data Files (`~/.botwerk`)
 
 - `config/config.json`
 - `sessions.json`

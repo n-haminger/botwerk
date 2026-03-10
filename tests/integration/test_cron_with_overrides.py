@@ -7,22 +7,22 @@ from unittest.mock import patch
 
 import pytest
 
-from ductor_bot.cli.codex_cache import CodexModelCache
-from ductor_bot.cli.codex_discovery import CodexModelInfo
-from ductor_bot.cli.param_resolver import TaskOverrides, resolve_cli_config
-from ductor_bot.config import AgentConfig
-from ductor_bot.cron.execution import build_cmd
-from ductor_bot.cron.manager import CronJob, CronManager
-from ductor_bot.workspace.paths import DuctorPaths
+from botwerk_bot.cli.codex_cache import CodexModelCache
+from botwerk_bot.cli.codex_discovery import CodexModelInfo
+from botwerk_bot.cli.param_resolver import TaskOverrides, resolve_cli_config
+from botwerk_bot.config import AgentConfig
+from botwerk_bot.cron.execution import build_cmd
+from botwerk_bot.cron.manager import CronJob, CronManager
+from botwerk_bot.workspace.paths import BotwerkPaths
 
 
 @pytest.fixture
-def mock_paths(tmp_path: Path) -> DuctorPaths:
-    """Create mock DuctorPaths for testing."""
-    home = tmp_path / "ductor_home"
+def mock_paths(tmp_path: Path) -> BotwerkPaths:
+    """Create mock BotwerkPaths for testing."""
+    home = tmp_path / "botwerk_home"
     fw = tmp_path / "fw"
-    paths = DuctorPaths(
-        ductor_home=home,
+    paths = BotwerkPaths(
+        botwerk_home=home,
         home_defaults=fw / "workspace",
         framework_root=fw,
     )
@@ -63,7 +63,7 @@ def base_config() -> AgentConfig:
 
 
 async def test_cron_task_model_override(
-    mock_paths: DuctorPaths,
+    mock_paths: BotwerkPaths,
     base_config: AgentConfig,
     mock_codex_cache: CodexModelCache,
 ) -> None:
@@ -95,7 +95,7 @@ async def test_cron_task_model_override(
     exec_config = resolve_cli_config(base_config, mock_codex_cache, task_overrides=overrides)
 
     # Build command
-    with patch("ductor_bot.cron.execution.which", return_value="/usr/bin/claude"):
+    with patch("botwerk_bot.cron.execution.which", return_value="/usr/bin/claude"):
         result = build_cmd(exec_config, "Test prompt")
 
     # Verify command structure
@@ -109,7 +109,7 @@ async def test_cron_task_model_override(
 
 
 async def test_cron_task_cli_parameters(
-    mock_paths: DuctorPaths,
+    mock_paths: BotwerkPaths,
     base_config: AgentConfig,
     mock_codex_cache: CodexModelCache,
 ) -> None:
@@ -143,7 +143,7 @@ async def test_cron_task_cli_parameters(
     exec_config = resolve_cli_config(base_config, mock_codex_cache, task_overrides=overrides)
 
     # Build command
-    with patch("ductor_bot.cron.execution.which", return_value="/usr/bin/codex"):
+    with patch("botwerk_bot.cron.execution.which", return_value="/usr/bin/codex"):
         result = build_cmd(exec_config, "Test prompt")
 
     # Verify --chrome appears in command before --
@@ -155,7 +155,7 @@ async def test_cron_task_cli_parameters(
 
 
 async def test_cron_task_reasoning_effort(
-    mock_paths: DuctorPaths,
+    mock_paths: BotwerkPaths,
     base_config: AgentConfig,
     mock_codex_cache: CodexModelCache,
 ) -> None:
@@ -189,7 +189,7 @@ async def test_cron_task_reasoning_effort(
     exec_config = resolve_cli_config(base_config, mock_codex_cache, task_overrides=overrides)
 
     # Build command
-    with patch("ductor_bot.cron.execution.which", return_value="/usr/bin/codex"):
+    with patch("botwerk_bot.cron.execution.which", return_value="/usr/bin/codex"):
         result = build_cmd(exec_config, "Test prompt")
 
     # Verify reasoning effort parameter
@@ -203,7 +203,7 @@ async def test_cron_task_reasoning_effort(
 
 
 async def test_cron_task_fallback_to_global(
-    mock_paths: DuctorPaths,
+    mock_paths: BotwerkPaths,
     mock_codex_cache: CodexModelCache,
 ) -> None:
     """Verify that tasks without overrides use global config."""
@@ -243,7 +243,7 @@ async def test_cron_task_fallback_to_global(
     exec_config = resolve_cli_config(global_config, mock_codex_cache, task_overrides=overrides)
 
     # Build command
-    with patch("ductor_bot.cron.execution.which", return_value="/usr/bin/claude"):
+    with patch("botwerk_bot.cron.execution.which", return_value="/usr/bin/claude"):
         result = build_cmd(exec_config, "Test prompt")
 
     # Verify global config is used
@@ -255,7 +255,7 @@ async def test_cron_task_fallback_to_global(
 
 
 async def test_cron_task_provider_switch(
-    mock_paths: DuctorPaths,
+    mock_paths: BotwerkPaths,
     base_config: AgentConfig,
     mock_codex_cache: CodexModelCache,
 ) -> None:
@@ -297,7 +297,7 @@ async def test_cron_task_provider_switch(
     exec_config = resolve_cli_config(base_config, mock_codex_cache, task_overrides=overrides)
 
     # Build command
-    with patch("ductor_bot.cron.execution.which", return_value="/usr/bin/codex"):
+    with patch("botwerk_bot.cron.execution.which", return_value="/usr/bin/codex"):
         result = build_cmd(exec_config, "Test prompt")
 
     # Verify Codex command instead of Claude

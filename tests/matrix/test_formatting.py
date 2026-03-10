@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from ductor_bot.matrix.formatting import markdown_to_matrix_html, strip_button_markers
+from botwerk_bot.matrix.formatting import markdown_to_matrix_html, strip_button_markers
 
 
 class TestStripButtonMarkers:

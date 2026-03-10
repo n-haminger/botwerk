@@ -1,0 +1,357 @@
+"""Entry point: python -m botwerk_bot."""
+
+from __future__ import annotations
+
+import asyncio
+import json
+import logging
+import shutil
+import signal
+import sys
+from collections.abc import Callable
+
+from rich.console import Console
+
+# Re-exports from cli_commands — referenced by main() dispatch and by
+# tests that patch botwerk_bot.__main__.<name>.
+from botwerk_bot.cli_commands.agents import cmd_agents as _cmd_agents
+from botwerk_bot.cli_commands.api_cmd import cmd_api as _cmd_api
+from botwerk_bot.cli_commands.docker import cmd_docker as _cmd_docker
+from botwerk_bot.cli_commands.lifecycle import (  # noqa: F401
+    _re_exec_bot,
+)
+from botwerk_bot.cli_commands.lifecycle import (
+    cmd_restart as _cmd_restart,
+)
+from botwerk_bot.cli_commands.lifecycle import (
+    start_bot as _start_bot,
+)
+from botwerk_bot.cli_commands.lifecycle import (
+    stop_bot as _stop_bot,
+)
+from botwerk_bot.cli_commands.lifecycle import (
+    uninstall as _uninstall,
+)
+from botwerk_bot.cli_commands.lifecycle import (
+    upgrade as _upgrade,
+)
+from botwerk_bot.cli_commands.service import cmd_service as _cmd_service
+from botwerk_bot.cli_commands.status import (
+    print_status as _print_status,
+)
+from botwerk_bot.cli_commands.status import (
+    print_usage as _print_usage,
+)
+from botwerk_bot.config import (
+    DEFAULT_EMPTY_GEMINI_API_KEY,
+    AgentConfig,
+    deep_merge_config,
+)
+from botwerk_bot.infra.json_store import atomic_json_save
+from botwerk_bot.workspace.init import init_workspace
+from botwerk_bot.workspace.paths import resolve_paths
+
+logger = logging.getLogger(__name__)
+
+_console = Console()
+
+
+# ---------------------------------------------------------------------------
+# Config helpers
+# ---------------------------------------------------------------------------
+
+
+def _is_configured() -> bool:
+    """Check if bot has a valid configuration."""
+    paths = resolve_paths()
+    if not paths.config_path.exists():
+        return False
+    try:
+        data = json.loads(paths.config_path.read_text(encoding="utf-8"))
+    except (json.JSONDecodeError, OSError):
+        return False
+
+    transport = data.get("transport", "telegram")
+    checker = _IS_CONFIGURED_CHECKS.get(transport, _is_configured_telegram)
+    return checker(data)
+
+
+def _is_configured_telegram(data: dict[str, object]) -> bool:
+    token = data.get("telegram_token", "")
+    users = data.get("allowed_user_ids", [])
+    return bool(token) and not str(token).startswith("YOUR_") and bool(users)
+
+
+def _is_configured_matrix(data: dict[str, object]) -> bool:
+    mx = data.get("matrix", {})
+    if not isinstance(mx, dict):
+        return False
+    return bool(mx.get("homeserver")) and bool(mx.get("user_id"))
+
+
+_IS_CONFIGURED_CHECKS: dict[str, Callable[[dict[str, object]], bool]] = {
+    "telegram": _is_configured_telegram,
+    "matrix": _is_configured_matrix,
+}
+
+
+def load_config() -> AgentConfig:
+    """Load, auto-create, and smart-merge the bot config.
+
+    Resolution order:
+    1. ``~/.botwerk/config/config.json`` (canonical location)
+    2. Copy from ``config.example.json`` in the framework root on first start
+    3. Fall back to Pydantic defaults if example file is missing
+
+    On every load the config is deep-merged with current Pydantic defaults
+    so that new fields from framework updates are added without destroying
+    user settings.
+    """
+    paths = resolve_paths()
+    config_path = paths.config_path
+
+    first_start = not config_path.exists()
+
+    if first_start:
+        config_path.parent.mkdir(parents=True, exist_ok=True)
+        example = paths.config_example_path
+        if example.is_file():
+            shutil.copy2(example, config_path)
+            logger.info("Created config from config.example.json at %s", config_path)
+        else:
+            defaults = AgentConfig().model_dump(mode="json")
+            defaults["gemini_api_key"] = DEFAULT_EMPTY_GEMINI_API_KEY
+            defaults.pop("api", None)  # Beta: only written by `botwerk api enable`
+            atomic_json_save(config_path, defaults)
+            logger.info("Created default config at %s", config_path)
+
+    try:
+        user_data: dict[str, object] = json.loads(config_path.read_text(encoding="utf-8"))
+    except (json.JSONDecodeError, OSError):
+        logger.exception("Failed to parse config at %s", config_path)
+        sys.exit(1)
+
+    normalized_existing = False
+    if user_data.get("gemini_api_key") is None:
+        user_data["gemini_api_key"] = DEFAULT_EMPTY_GEMINI_API_KEY
+        normalized_existing = True
+
+    defaults = AgentConfig().model_dump(mode="json")
+    defaults["gemini_api_key"] = DEFAULT_EMPTY_GEMINI_API_KEY
+    defaults.pop("api", None)  # Beta: only written by `botwerk api enable`
+    merged, changed = deep_merge_config(user_data, defaults)
+    changed = changed or normalized_existing
+
+    if changed:
+        atomic_json_save(config_path, merged)
+        logger.info("Extended config with new default fields")
+
+    init_workspace(paths)
+    return AgentConfig.model_validate(merged)
+
+
+# ---------------------------------------------------------------------------
+# Bot lifecycle
+# ---------------------------------------------------------------------------
+
+
+async def run_bot(config: AgentConfig) -> int:
+    """Validate config and run the bot via AgentSupervisor.
+
+    The supervisor manages the main agent and dynamically created sub-agents
+    from ``agents.json``.  If no sub-agents are defined, the supervisor runs
+    only the main agent — behaviour is identical to the old single-bot path.
+
+    Returns the exit code from the bot (``0`` = clean, ``42`` = restart requested).
+    """
+    paths = resolve_paths(botwerk_home=config.botwerk_home)
+
+    validator = _TRANSPORT_VALIDATORS.get(config.transport)
+    if validator:
+        validator(config)
+
+    from botwerk_bot.infra.pidlock import acquire_lock, release_lock
+    from botwerk_bot.multiagent.supervisor import AgentSupervisor
+
+    acquire_lock(pid_file=paths.botwerk_home / "bot.pid", kill_existing=True)
+
+    supervisor = AgentSupervisor(config)
+    exit_code = 0
+    loop = asyncio.get_running_loop()
+    current_task = asyncio.current_task()
+    installed_signals: list[signal.Signals] = []
+
+    def _request_shutdown() -> None:
+        if current_task is not None and not current_task.done():
+            current_task.cancel()
+
+    if current_task is not None and sys.platform != "win32":
+        for sig in (signal.SIGTERM, signal.SIGINT):
+            try:
+                loop.add_signal_handler(sig, _request_shutdown)
+            except (NotImplementedError, RuntimeError, ValueError):
+                continue
+            installed_signals.append(sig)
+
+    try:
+        exit_code = await supervisor.start()
+    except asyncio.CancelledError:
+        logger.info("Termination signal received, shutting down gracefully...")
+    except KeyboardInterrupt:
+        logger.info("Shutting down...")
+    finally:
+        for sig in installed_signals:
+            loop.remove_signal_handler(sig)
+        await supervisor.stop_all()
+        release_lock(pid_file=paths.botwerk_home / "bot.pid")
+    return exit_code
+
+
+# Backward-compat alias for external scripts that call run_telegram().
+run_telegram = run_bot
+
+
+def _validate_telegram_config(config: AgentConfig) -> None:
+    """Validate Telegram transport requirements."""
+    missing_token = not config.telegram_token or config.telegram_token.startswith("YOUR_")
+    needs_users = not config.allowed_user_ids
+    if missing_token or needs_users:
+        _console.print(
+            "[bold yellow]Config is incomplete. Run [bold]botwerk onboarding[/bold].[/bold yellow]"
+        )
+        sys.exit(1)
+
+
+def _validate_matrix_config(config: AgentConfig) -> None:
+    """Validate Matrix transport requirements."""
+    m = config.matrix
+    hint = " Run [bold]botwerk onboarding[/bold] to reconfigure."
+    if not m.homeserver:
+        _console.print(f"[bold yellow]Matrix homeserver URL is required.{hint}[/bold yellow]")
+        sys.exit(1)
+    if not m.user_id:
+        _console.print(f"[bold yellow]Matrix user_id is required.{hint}[/bold yellow]")
+        sys.exit(1)
+    if not m.password and not m.access_token:
+        _console.print(f"[bold yellow]Matrix password or access_token is required.{hint}[/bold yellow]")
+        sys.exit(1)
+    if not m.allowed_rooms and not m.allowed_users:
+        _console.print(
+            f"[bold yellow]At least one allowed_room or allowed_user is required.{hint}[/bold yellow]"
+        )
+        sys.exit(1)
+
+
+_TRANSPORT_VALIDATORS: dict[str, Callable[[AgentConfig], None]] = {
+    "telegram": _validate_telegram_config,
+    "matrix": _validate_matrix_config,
+}
+
+
+# ---------------------------------------------------------------------------
+# CLI command handlers
+# ---------------------------------------------------------------------------
+
+
+def _cmd_status() -> None:
+    """Show bot status or hint to configure."""
+    from rich.panel import Panel
+
+    _console.print()
+    if _is_configured():
+        _print_status()
+    else:
+        _console.print(
+            Panel(
+                "[bold yellow]Not configured.[/bold yellow]\n\n"
+                "Run [bold]botwerk[/bold] to start the setup wizard.",
+                title="[bold]Status[/bold]",
+                border_style="yellow",
+                padding=(1, 2),
+            ),
+        )
+    _console.print()
+
+
+def _cmd_setup(verbose: bool) -> None:
+    """Run onboarding (with smart reset if already configured), then start."""
+    from botwerk_bot.cli.init_wizard import run_onboarding, run_smart_reset
+
+    _stop_bot()
+    paths = resolve_paths()
+    if _is_configured():
+        run_smart_reset(paths.botwerk_home)
+    service_installed = run_onboarding()
+    if service_installed:
+        return
+    _start_bot(verbose)
+
+
+def _default_action(verbose: bool) -> None:
+    """Auto-onboarding if unconfigured, then start bot."""
+    if not _is_configured():
+        from botwerk_bot.cli.init_wizard import run_onboarding
+
+        service_installed = run_onboarding()
+        if service_installed:
+            return
+    _start_bot(verbose)
+
+
+# ---------------------------------------------------------------------------
+# Entry point
+# ---------------------------------------------------------------------------
+
+_COMMANDS: dict[str, str] = {
+    "help": "help",
+    "status": "status",
+    "stop": "stop",
+    "restart": "restart",
+    "upgrade": "upgrade",
+    "uninstall": "uninstall",
+    "onboarding": "setup",
+    "reset": "setup",
+    "service": "service",
+    "docker": "docker",
+    "api": "api",
+    "agents": "agents",
+}
+
+_Action = Callable[[], None]
+
+
+def main() -> None:
+    """CLI entry point."""
+    args = sys.argv[1:]
+    commands = [a for a in args if not a.startswith("-")]
+    verbose = "--verbose" in args or "-v" in args
+
+    if "--help" in args or "-h" in args:
+        commands.append("help")
+
+    # Resolve first matching command
+    action = next((_COMMANDS[c] for c in commands if c in _COMMANDS), None)
+
+    dispatch: dict[str, _Action] = {
+        "help": _print_usage,
+        "status": _cmd_status,
+        "stop": _stop_bot,
+        "restart": _cmd_restart,
+        "upgrade": _upgrade,
+        "uninstall": _uninstall,
+        "setup": lambda: _cmd_setup(verbose),
+        "service": lambda: _cmd_service(args),
+        "docker": lambda: _cmd_docker(args),
+        "api": lambda: _cmd_api(args),
+        "agents": lambda: _cmd_agents(args),
+    }
+
+    handler = dispatch.get(action) if action else None
+    if handler is not None:
+        handler()
+    else:
+        _default_action(verbose)
+
+
+if __name__ == "__main__":
+    main()

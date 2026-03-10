@@ -4,8 +4,8 @@ Context-aware logging infrastructure used by all runtime modules.
 
 ## Files
 
-- `ductor_bot/log_context.py`: `ContextVar` state (`agent_name`, `operation`, `chat_id`, `session_id`) + `ContextFilter`.
-- `ductor_bot/logging_config.py`: root logger setup (console + rotating file via queue listener).
+- `botwerk_bot/log_context.py`: `ContextVar` state (`agent_name`, `operation`, `chat_id`, `session_id`) + `ContextFilter`.
+- `botwerk_bot/logging_config.py`: root logger setup (console + rotating file via queue listener).
 
 ## Context Model
 
@@ -38,7 +38,7 @@ Multi-agent note:
 `setup_logging()` configures:
 
 - colored console logs (`stderr`)
-- rotating file logs in `~/.ductor/logs/agent.log` (`5MB`, `3` backups)
+- rotating file logs in `~/.botwerk/logs/agent.log` (`5MB`, `3` backups)
 
 File logging uses `QueueHandler` + `QueueListener` so file I/O does not block the event loop.
 `QueueListener` is stopped on reconfiguration and via `atexit` shutdown hook.

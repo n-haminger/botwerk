@@ -5,20 +5,20 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
-from ductor_bot.cli.auth import AuthResult, AuthStatus
-from ductor_bot.workspace.paths import DuctorPaths
-from ductor_bot.workspace.rules_selector import RulesSelector
+from botwerk_bot.cli.auth import AuthResult, AuthStatus
+from botwerk_bot.workspace.paths import BotwerkPaths
+from botwerk_bot.workspace.rules_selector import RulesSelector
 
 
 @pytest.fixture
-def mock_paths(tmp_path: Path) -> DuctorPaths:
-    """Create DuctorPaths with temp directories for testing."""
+def mock_paths(tmp_path: Path) -> BotwerkPaths:
+    """Create BotwerkPaths with temp directories for testing."""
     home_defaults = tmp_path / "home_defaults"
-    ductor_home = tmp_path / "ductor_home"
+    botwerk_home = tmp_path / "botwerk_home"
 
     # Create directory structure
     home_defaults.mkdir()
-    ductor_home.mkdir()
+    botwerk_home.mkdir()
 
     # Create mock template directories
     config_dir = home_defaults / "config"
@@ -35,57 +35,57 @@ def mock_paths(tmp_path: Path) -> DuctorPaths:
         (d / "RULES-gemini-only.md").write_text("# Gemini Only Template")
         (d / "RULES-all-clis.md").write_text("# All CLIs Template")
 
-    paths = MagicMock(spec=DuctorPaths)
+    paths = MagicMock(spec=BotwerkPaths)
     paths.home_defaults = home_defaults
-    paths.ductor_home = ductor_home
+    paths.botwerk_home = botwerk_home
 
     return paths
 
 
-def test_variant_selection_claude_only(mock_paths: DuctorPaths) -> None:
+def test_variant_selection_claude_only(mock_paths: BotwerkPaths) -> None:
     """Test variant selection when only Claude is authenticated."""
     auth = {
         "claude": AuthResult(provider="claude", status=AuthStatus.AUTHENTICATED),
         "codex": AuthResult(provider="codex", status=AuthStatus.NOT_FOUND),
     }
 
-    with patch("ductor_bot.cli.auth.check_all_auth", return_value=auth):
+    with patch("botwerk_bot.cli.auth.check_all_auth", return_value=auth):
         selector = RulesSelector(mock_paths)
         assert selector.get_variant_suffix() == "claude-only"
 
 
-def test_variant_selection_codex_only(mock_paths: DuctorPaths) -> None:
+def test_variant_selection_codex_only(mock_paths: BotwerkPaths) -> None:
     """Test variant selection when only Codex is authenticated."""
     auth = {
         "claude": AuthResult(provider="claude", status=AuthStatus.NOT_FOUND),
         "codex": AuthResult(provider="codex", status=AuthStatus.AUTHENTICATED),
     }
 
-    with patch("ductor_bot.cli.auth.check_all_auth", return_value=auth):
+    with patch("botwerk_bot.cli.auth.check_all_auth", return_value=auth):
         selector = RulesSelector(mock_paths)
         assert selector.get_variant_suffix() == "codex-only"
 
 
-def test_variant_selection_both(mock_paths: DuctorPaths) -> None:
+def test_variant_selection_both(mock_paths: BotwerkPaths) -> None:
     """Test variant selection when both CLIs are authenticated."""
     auth = {
         "claude": AuthResult(provider="claude", status=AuthStatus.AUTHENTICATED),
         "codex": AuthResult(provider="codex", status=AuthStatus.AUTHENTICATED),
     }
 
-    with patch("ductor_bot.cli.auth.check_all_auth", return_value=auth):
+    with patch("botwerk_bot.cli.auth.check_all_auth", return_value=auth):
         selector = RulesSelector(mock_paths)
         assert selector.get_variant_suffix() == "all-clis"
 
 
-def test_template_discovery(mock_paths: DuctorPaths) -> None:
+def test_template_discovery(mock_paths: BotwerkPaths) -> None:
     """Test automatic discovery of template directories."""
     auth = {
         "claude": AuthResult(provider="claude", status=AuthStatus.AUTHENTICATED),
         "codex": AuthResult(provider="codex", status=AuthStatus.NOT_FOUND),
     }
 
-    with patch("ductor_bot.cli.auth.check_all_auth", return_value=auth):
+    with patch("botwerk_bot.cli.auth.check_all_auth", return_value=auth):
         selector = RulesSelector(mock_paths)
         dirs = selector.discover_template_directories()
 
@@ -97,62 +97,62 @@ def test_template_discovery(mock_paths: DuctorPaths) -> None:
         assert "webhook_tools" in dir_names
 
 
-def test_deploy_claude_only_no_agents_md(mock_paths: DuctorPaths) -> None:
+def test_deploy_claude_only_no_agents_md(mock_paths: BotwerkPaths) -> None:
     """Test that only CLAUDE.md is created when only Claude is authenticated."""
     auth = {
         "claude": AuthResult(provider="claude", status=AuthStatus.AUTHENTICATED),
         "codex": AuthResult(provider="codex", status=AuthStatus.NOT_FOUND),
     }
 
-    with patch("ductor_bot.cli.auth.check_all_auth", return_value=auth):
+    with patch("botwerk_bot.cli.auth.check_all_auth", return_value=auth):
         selector = RulesSelector(mock_paths)
         selector.deploy_rules()
 
         # Check that CLAUDE.md was deployed
-        config_claude = mock_paths.ductor_home / "config" / "CLAUDE.md"
+        config_claude = mock_paths.botwerk_home / "config" / "CLAUDE.md"
         assert config_claude.exists()
         assert "Claude Only Template" in config_claude.read_text()
 
         # Check that AGENTS.md was NOT created
-        config_agents = mock_paths.ductor_home / "config" / "AGENTS.md"
+        config_agents = mock_paths.botwerk_home / "config" / "AGENTS.md"
         assert not config_agents.exists()
 
 
-def test_deploy_codex_only_with_agents_md(mock_paths: DuctorPaths) -> None:
+def test_deploy_codex_only_with_agents_md(mock_paths: BotwerkPaths) -> None:
     """Test that only AGENTS.md is created when only Codex is authenticated."""
     auth = {
         "claude": AuthResult(provider="claude", status=AuthStatus.NOT_FOUND),
         "codex": AuthResult(provider="codex", status=AuthStatus.AUTHENTICATED),
     }
 
-    with patch("ductor_bot.cli.auth.check_all_auth", return_value=auth):
+    with patch("botwerk_bot.cli.auth.check_all_auth", return_value=auth):
         selector = RulesSelector(mock_paths)
         selector.deploy_rules()
 
         # Check that AGENTS.md was deployed
-        config_agents = mock_paths.ductor_home / "config" / "AGENTS.md"
+        config_agents = mock_paths.botwerk_home / "config" / "AGENTS.md"
         assert config_agents.exists()
         assert "Codex Only Template" in config_agents.read_text()
 
         # Check that CLAUDE.md was NOT created
-        config_claude = mock_paths.ductor_home / "config" / "CLAUDE.md"
+        config_claude = mock_paths.botwerk_home / "config" / "CLAUDE.md"
         assert not config_claude.exists()
 
 
-def test_deploy_both_with_both_files(mock_paths: DuctorPaths) -> None:
+def test_deploy_both_with_both_files(mock_paths: BotwerkPaths) -> None:
     """Test that both CLAUDE.md and AGENTS.md are created when both CLIs are authenticated."""
     auth = {
         "claude": AuthResult(provider="claude", status=AuthStatus.AUTHENTICATED),
         "codex": AuthResult(provider="codex", status=AuthStatus.AUTHENTICATED),
     }
 
-    with patch("ductor_bot.cli.auth.check_all_auth", return_value=auth):
+    with patch("botwerk_bot.cli.auth.check_all_auth", return_value=auth):
         selector = RulesSelector(mock_paths)
         selector.deploy_rules()
 
         # Check that both files were deployed with same content
-        config_claude = mock_paths.ductor_home / "config" / "CLAUDE.md"
-        config_agents = mock_paths.ductor_home / "config" / "AGENTS.md"
+        config_claude = mock_paths.botwerk_home / "config" / "CLAUDE.md"
+        config_agents = mock_paths.botwerk_home / "config" / "AGENTS.md"
 
         assert config_claude.exists()
         assert config_agents.exists()
@@ -165,31 +165,31 @@ def test_deploy_both_with_both_files(mock_paths: DuctorPaths) -> None:
         assert claude_content == agents_content  # Same content
 
 
-def test_deploy_all_directories(mock_paths: DuctorPaths) -> None:
+def test_deploy_all_directories(mock_paths: BotwerkPaths) -> None:
     """Test that all discovered directories get rules deployed."""
     auth = {
         "claude": AuthResult(provider="claude", status=AuthStatus.AUTHENTICATED),
         "codex": AuthResult(provider="codex", status=AuthStatus.AUTHENTICATED),
     }
 
-    with patch("ductor_bot.cli.auth.check_all_auth", return_value=auth):
+    with patch("botwerk_bot.cli.auth.check_all_auth", return_value=auth):
         selector = RulesSelector(mock_paths)
         selector.deploy_rules()
 
         # Check that all 3 directories got both files
-        assert (mock_paths.ductor_home / "config" / "CLAUDE.md").exists()
-        assert (mock_paths.ductor_home / "config" / "AGENTS.md").exists()
-        assert (mock_paths.ductor_home / "workspace" / "cron_tasks" / "CLAUDE.md").exists()
-        assert (mock_paths.ductor_home / "workspace" / "cron_tasks" / "AGENTS.md").exists()
+        assert (mock_paths.botwerk_home / "config" / "CLAUDE.md").exists()
+        assert (mock_paths.botwerk_home / "config" / "AGENTS.md").exists()
+        assert (mock_paths.botwerk_home / "workspace" / "cron_tasks" / "CLAUDE.md").exists()
+        assert (mock_paths.botwerk_home / "workspace" / "cron_tasks" / "AGENTS.md").exists()
         assert (
-            mock_paths.ductor_home / "workspace" / "tools" / "webhook_tools" / "CLAUDE.md"
+            mock_paths.botwerk_home / "workspace" / "tools" / "webhook_tools" / "CLAUDE.md"
         ).exists()
         assert (
-            mock_paths.ductor_home / "workspace" / "tools" / "webhook_tools" / "AGENTS.md"
+            mock_paths.botwerk_home / "workspace" / "tools" / "webhook_tools" / "AGENTS.md"
         ).exists()
 
 
-def test_fallback_to_static_template(mock_paths: DuctorPaths) -> None:
+def test_fallback_to_static_template(mock_paths: BotwerkPaths) -> None:
     """Test fallback to static RULES.md when no variants exist."""
     # Create directory with only static template
     static_dir = mock_paths.home_defaults / "static_test"
@@ -201,17 +201,17 @@ def test_fallback_to_static_template(mock_paths: DuctorPaths) -> None:
         "codex": AuthResult(provider="codex", status=AuthStatus.NOT_FOUND),
     }
 
-    with patch("ductor_bot.cli.auth.check_all_auth", return_value=auth):
+    with patch("botwerk_bot.cli.auth.check_all_auth", return_value=auth):
         selector = RulesSelector(mock_paths)
         selector.deploy_rules()
 
         # Should deploy static template as CLAUDE.md
-        deployed = mock_paths.ductor_home / "static_test" / "CLAUDE.md"
+        deployed = mock_paths.botwerk_home / "static_test" / "CLAUDE.md"
         assert deployed.exists()
         assert "Static Template" in deployed.read_text()
 
 
-def test_skip_directory_without_templates(mock_paths: DuctorPaths) -> None:
+def test_skip_directory_without_templates(mock_paths: BotwerkPaths) -> None:
     """Test that directories without templates are skipped."""
     # Create directory without any templates
     empty_dir = mock_paths.home_defaults / "empty"
@@ -222,7 +222,7 @@ def test_skip_directory_without_templates(mock_paths: DuctorPaths) -> None:
         "codex": AuthResult(provider="codex", status=AuthStatus.NOT_FOUND),
     }
 
-    with patch("ductor_bot.cli.auth.check_all_auth", return_value=auth):
+    with patch("botwerk_bot.cli.auth.check_all_auth", return_value=auth):
         selector = RulesSelector(mock_paths)
         dirs = selector.discover_template_directories()
 
@@ -230,15 +230,15 @@ def test_skip_directory_without_templates(mock_paths: DuctorPaths) -> None:
         assert empty_dir not in dirs
 
 
-def test_cleanup_removes_agents_md_when_only_claude(mock_paths: DuctorPaths) -> None:
+def test_cleanup_removes_agents_md_when_only_claude(mock_paths: BotwerkPaths) -> None:
     """Test that stale AGENTS.md files are removed when only Claude is authenticated.
 
     Files inside workspace/cron_tasks/ are user-owned and must NOT be deleted.
     """
     # Pre-create old AGENTS.md files (simulating previous Codex installation)
-    old_agents1 = mock_paths.ductor_home / "config" / "AGENTS.md"
+    old_agents1 = mock_paths.botwerk_home / "config" / "AGENTS.md"
     # cron_tasks files are user-owned — they must survive cleanup
-    cron_task_agents = mock_paths.ductor_home / "workspace" / "cron_tasks" / "my-task" / "AGENTS.md"
+    cron_task_agents = mock_paths.botwerk_home / "workspace" / "cron_tasks" / "my-task" / "AGENTS.md"
     old_agents1.parent.mkdir(parents=True, exist_ok=True)
     cron_task_agents.parent.mkdir(parents=True, exist_ok=True)
     old_agents1.write_text("# Old Agents File")
@@ -249,7 +249,7 @@ def test_cleanup_removes_agents_md_when_only_claude(mock_paths: DuctorPaths) -> 
         "codex": AuthResult(provider="codex", status=AuthStatus.NOT_FOUND),
     }
 
-    with patch("ductor_bot.cli.auth.check_all_auth", return_value=auth):
+    with patch("botwerk_bot.cli.auth.check_all_auth", return_value=auth):
         selector = RulesSelector(mock_paths)
         selector.deploy_rules()
 
@@ -259,16 +259,16 @@ def test_cleanup_removes_agents_md_when_only_claude(mock_paths: DuctorPaths) -> 
         assert cron_task_agents.exists()
 
         # CLAUDE.md files should exist
-        assert (mock_paths.ductor_home / "config" / "CLAUDE.md").exists()
+        assert (mock_paths.botwerk_home / "config" / "CLAUDE.md").exists()
 
 
-def test_cleanup_removes_claude_md_when_only_codex(mock_paths: DuctorPaths) -> None:
+def test_cleanup_removes_claude_md_when_only_codex(mock_paths: BotwerkPaths) -> None:
     """Test that stale CLAUDE.md files are removed when only Codex is authenticated.
 
     Files inside workspace/cron_tasks/ are user-owned and must NOT be deleted.
     """
-    old_claude1 = mock_paths.ductor_home / "config" / "CLAUDE.md"
-    cron_task_claude = mock_paths.ductor_home / "workspace" / "cron_tasks" / "my-task" / "CLAUDE.md"
+    old_claude1 = mock_paths.botwerk_home / "config" / "CLAUDE.md"
+    cron_task_claude = mock_paths.botwerk_home / "workspace" / "cron_tasks" / "my-task" / "CLAUDE.md"
     old_claude1.parent.mkdir(parents=True, exist_ok=True)
     cron_task_claude.parent.mkdir(parents=True, exist_ok=True)
     old_claude1.write_text("# Old Claude File")
@@ -279,7 +279,7 @@ def test_cleanup_removes_claude_md_when_only_codex(mock_paths: DuctorPaths) -> N
         "codex": AuthResult(provider="codex", status=AuthStatus.AUTHENTICATED),
     }
 
-    with patch("ductor_bot.cli.auth.check_all_auth", return_value=auth):
+    with patch("botwerk_bot.cli.auth.check_all_auth", return_value=auth):
         selector = RulesSelector(mock_paths)
         selector.deploy_rules()
 
@@ -289,29 +289,29 @@ def test_cleanup_removes_claude_md_when_only_codex(mock_paths: DuctorPaths) -> N
         assert cron_task_claude.exists()
 
         # AGENTS.md files should exist
-        assert (mock_paths.ductor_home / "config" / "AGENTS.md").exists()
+        assert (mock_paths.botwerk_home / "config" / "AGENTS.md").exists()
 
 
-def test_cleanup_keeps_both_when_both_authenticated(mock_paths: DuctorPaths) -> None:
+def test_cleanup_keeps_both_when_both_authenticated(mock_paths: BotwerkPaths) -> None:
     """Test that no cleanup happens when both CLIs are authenticated."""
     auth = {
         "claude": AuthResult(provider="claude", status=AuthStatus.AUTHENTICATED),
         "codex": AuthResult(provider="codex", status=AuthStatus.AUTHENTICATED),
     }
 
-    with patch("ductor_bot.cli.auth.check_all_auth", return_value=auth):
+    with patch("botwerk_bot.cli.auth.check_all_auth", return_value=auth):
         selector = RulesSelector(mock_paths)
         selector.deploy_rules()
 
         # Both files should exist and stay
-        config_claude = mock_paths.ductor_home / "config" / "CLAUDE.md"
-        config_agents = mock_paths.ductor_home / "config" / "AGENTS.md"
+        config_claude = mock_paths.botwerk_home / "config" / "CLAUDE.md"
+        config_agents = mock_paths.botwerk_home / "config" / "AGENTS.md"
 
         assert config_claude.exists()
         assert config_agents.exists()
 
 
-def test_variant_selection_gemini_only(mock_paths: DuctorPaths) -> None:
+def test_variant_selection_gemini_only(mock_paths: BotwerkPaths) -> None:
     """Test variant selection when only Gemini is authenticated."""
     auth = {
         "claude": AuthResult(provider="claude", status=AuthStatus.NOT_FOUND),
@@ -319,12 +319,12 @@ def test_variant_selection_gemini_only(mock_paths: DuctorPaths) -> None:
         "gemini": AuthResult(provider="gemini", status=AuthStatus.AUTHENTICATED),
     }
 
-    with patch("ductor_bot.cli.auth.check_all_auth", return_value=auth):
+    with patch("botwerk_bot.cli.auth.check_all_auth", return_value=auth):
         selector = RulesSelector(mock_paths)
         assert selector.get_variant_suffix() == "gemini-only"
 
 
-def test_variant_selection_claude_and_gemini(mock_paths: DuctorPaths) -> None:
+def test_variant_selection_claude_and_gemini(mock_paths: BotwerkPaths) -> None:
     """Test variant when Claude + Gemini authenticated (2+ providers = all-clis)."""
     auth = {
         "claude": AuthResult(provider="claude", status=AuthStatus.AUTHENTICATED),
@@ -332,12 +332,12 @@ def test_variant_selection_claude_and_gemini(mock_paths: DuctorPaths) -> None:
         "gemini": AuthResult(provider="gemini", status=AuthStatus.AUTHENTICATED),
     }
 
-    with patch("ductor_bot.cli.auth.check_all_auth", return_value=auth):
+    with patch("botwerk_bot.cli.auth.check_all_auth", return_value=auth):
         selector = RulesSelector(mock_paths)
         assert selector.get_variant_suffix() == "all-clis"
 
 
-def test_variant_selection_all_three(mock_paths: DuctorPaths) -> None:
+def test_variant_selection_all_three(mock_paths: BotwerkPaths) -> None:
     """Test variant when all three providers authenticated."""
     auth = {
         "claude": AuthResult(provider="claude", status=AuthStatus.AUTHENTICATED),
@@ -345,12 +345,12 @@ def test_variant_selection_all_three(mock_paths: DuctorPaths) -> None:
         "gemini": AuthResult(provider="gemini", status=AuthStatus.AUTHENTICATED),
     }
 
-    with patch("ductor_bot.cli.auth.check_all_auth", return_value=auth):
+    with patch("botwerk_bot.cli.auth.check_all_auth", return_value=auth):
         selector = RulesSelector(mock_paths)
         assert selector.get_variant_suffix() == "all-clis"
 
 
-def test_variant_selection_codex_and_gemini(mock_paths: DuctorPaths) -> None:
+def test_variant_selection_codex_and_gemini(mock_paths: BotwerkPaths) -> None:
     """Test variant when Codex + Gemini authenticated (2+ = all-clis)."""
     auth = {
         "claude": AuthResult(provider="claude", status=AuthStatus.NOT_FOUND),
@@ -358,12 +358,12 @@ def test_variant_selection_codex_and_gemini(mock_paths: DuctorPaths) -> None:
         "gemini": AuthResult(provider="gemini", status=AuthStatus.AUTHENTICATED),
     }
 
-    with patch("ductor_bot.cli.auth.check_all_auth", return_value=auth):
+    with patch("botwerk_bot.cli.auth.check_all_auth", return_value=auth):
         selector = RulesSelector(mock_paths)
         assert selector.get_variant_suffix() == "all-clis"
 
 
-def test_deploy_with_gemini_creates_gemini_md(mock_paths: DuctorPaths) -> None:
+def test_deploy_with_gemini_creates_gemini_md(mock_paths: BotwerkPaths) -> None:
     """Test that GEMINI.md is deployed when Gemini is authenticated."""
     auth = {
         "claude": AuthResult(provider="claude", status=AuthStatus.NOT_FOUND),
@@ -371,20 +371,20 @@ def test_deploy_with_gemini_creates_gemini_md(mock_paths: DuctorPaths) -> None:
         "gemini": AuthResult(provider="gemini", status=AuthStatus.AUTHENTICATED),
     }
 
-    with patch("ductor_bot.cli.auth.check_all_auth", return_value=auth):
+    with patch("botwerk_bot.cli.auth.check_all_auth", return_value=auth):
         selector = RulesSelector(mock_paths)
         selector.deploy_rules()
 
-        gemini_md = mock_paths.ductor_home / "config" / "GEMINI.md"
+        gemini_md = mock_paths.botwerk_home / "config" / "GEMINI.md"
         assert gemini_md.exists()
         assert "Gemini Only Template" in gemini_md.read_text()
 
         # CLAUDE.md and AGENTS.md should NOT exist
-        assert not (mock_paths.ductor_home / "config" / "CLAUDE.md").exists()
-        assert not (mock_paths.ductor_home / "config" / "AGENTS.md").exists()
+        assert not (mock_paths.botwerk_home / "config" / "CLAUDE.md").exists()
+        assert not (mock_paths.botwerk_home / "config" / "AGENTS.md").exists()
 
 
-def test_deploy_all_three_providers(mock_paths: DuctorPaths) -> None:
+def test_deploy_all_three_providers(mock_paths: BotwerkPaths) -> None:
     """Test that all three rule files are deployed when all providers authenticated."""
     auth = {
         "claude": AuthResult(provider="claude", status=AuthStatus.AUTHENTICATED),
@@ -392,19 +392,19 @@ def test_deploy_all_three_providers(mock_paths: DuctorPaths) -> None:
         "gemini": AuthResult(provider="gemini", status=AuthStatus.AUTHENTICATED),
     }
 
-    with patch("ductor_bot.cli.auth.check_all_auth", return_value=auth):
+    with patch("botwerk_bot.cli.auth.check_all_auth", return_value=auth):
         selector = RulesSelector(mock_paths)
         selector.deploy_rules()
 
-        config_dir = mock_paths.ductor_home / "config"
+        config_dir = mock_paths.botwerk_home / "config"
         assert (config_dir / "CLAUDE.md").exists()
         assert (config_dir / "AGENTS.md").exists()
         assert (config_dir / "GEMINI.md").exists()
 
 
-def test_cleanup_removes_gemini_md_when_not_authenticated(mock_paths: DuctorPaths) -> None:
+def test_cleanup_removes_gemini_md_when_not_authenticated(mock_paths: BotwerkPaths) -> None:
     """Test that stale GEMINI.md files are removed when Gemini is not authenticated."""
-    old_gemini = mock_paths.ductor_home / "config" / "GEMINI.md"
+    old_gemini = mock_paths.botwerk_home / "config" / "GEMINI.md"
     old_gemini.parent.mkdir(parents=True, exist_ok=True)
     old_gemini.write_text("# Old Gemini File")
 
@@ -414,9 +414,9 @@ def test_cleanup_removes_gemini_md_when_not_authenticated(mock_paths: DuctorPath
         "gemini": AuthResult(provider="gemini", status=AuthStatus.NOT_FOUND),
     }
 
-    with patch("ductor_bot.cli.auth.check_all_auth", return_value=auth):
+    with patch("botwerk_bot.cli.auth.check_all_auth", return_value=auth):
         selector = RulesSelector(mock_paths)
         selector.deploy_rules()
 
         assert not old_gemini.exists()
-        assert (mock_paths.ductor_home / "config" / "CLAUDE.md").exists()
+        assert (mock_paths.botwerk_home / "config" / "CLAUDE.md").exists()

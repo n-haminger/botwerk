@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from ductor_bot.orchestrator.directives import ParsedDirectives, parse_directives
+from botwerk_bot.orchestrator.directives import ParsedDirectives, parse_directives
 
 KNOWN = frozenset({"opus", "sonnet", "haiku"})
 

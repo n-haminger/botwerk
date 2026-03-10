@@ -6,7 +6,7 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
-from ductor_bot.transport_registry import create_bot
+from botwerk_bot.transport_registry import create_bot
 
 
 class TestTransportRegistry:
@@ -20,7 +20,7 @@ class TestTransportRegistry:
         config = MagicMock()
         config.transport = "telegram"
         fake_bot = MagicMock()
-        with patch("ductor_bot.bot.app.TelegramBot", return_value=fake_bot):
+        with patch("botwerk_bot.bot.app.TelegramBot", return_value=fake_bot):
             bot = create_bot(config, agent_name="test")
         assert bot is fake_bot
 
@@ -28,6 +28,6 @@ class TestTransportRegistry:
         config = MagicMock()
         config.transport = "matrix"
         fake_bot = MagicMock()
-        with patch("ductor_bot.matrix.bot.MatrixBot", return_value=fake_bot):
+        with patch("botwerk_bot.matrix.bot.MatrixBot", return_value=fake_bot):
             bot = create_bot(config, agent_name="test")
         assert bot is fake_bot

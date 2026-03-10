@@ -1,6 +1,6 @@
-# ductor Docs
+# botwerk Docs
 
-ductor routes chat input to official provider CLIs (`claude`, `codex`, `gemini`), streams responses back via Telegram or Matrix, persists session state, and runs cron/heartbeat/webhook/cleanup automation in-process. It also supports a direct WebSocket API transport with authenticated file upload/download.
+botwerk routes chat input to official provider CLIs (`claude`, `codex`, `gemini`), streams responses back via Telegram or Matrix, persists session state, and runs cron/heartbeat/webhook/cleanup automation in-process. It also supports a direct WebSocket API transport with authenticated file upload/download.
 
 ## Onboarding (Read in This Order)
 
@@ -18,25 +18,25 @@ ductor routes chat input to official provider CLIs (`claude`, `codex`, `gemini`)
 12. `docs/modules/api.md` -- direct WebSocket ingress and HTTP file endpoints.
 13. `docs/modules/cli.md` -- provider wrappers, stream parsing, process control.
 14. `docs/modules/cli_commands.md` -- CLI command split from `__main__.py`.
-15. `docs/modules/workspace.md` -- `~/.ductor` seeding, rules sync, skill sync.
+15. `docs/modules/workspace.md` -- `~/.botwerk` seeding, rules sync, skill sync.
 16. `docs/modules/multiagent.md` -- supervisor, bus bridge, sub-agent runtime.
 17. Remaining module docs (`background`, `cron`, `webhook`, `heartbeat`, `cleanup`, `infra`, `supervisor`, `security`, `logging`, `files`, `text`, `skill_system`).
 
 ## System in 60 Seconds
 
-- `ductor_bot/__main__.py`: thin CLI entrypoint (dispatch) + config loading.
-- `ductor_bot/cli_commands/`: concrete CLI subcommand implementations (`agents`, `docker`, `service`, `api`, lifecycle/status helpers).
-- `ductor_bot/bot/`: aiogram handlers, auth/sequencing middleware, streaming dispatch, callback routing, group audit/chat tracking.
-- `ductor_bot/orchestrator/`: command registry, directives/hooks, normal + streaming + heartbeat flows, provider/session/task wiring.
-- `ductor_bot/bus/`: central `MessageBus` + `Envelope` + `LockPool` + Telegram transport formatting.
-- `ductor_bot/session/`: provider-isolated session state keyed by `SessionKey(chat_id, topic_id)` plus named-session registry.
-- `ductor_bot/tasks/`: shared background task delegation (`TaskHub`) and persistent task registry.
-- `ductor_bot/api/`: WebSocket ingress (`/ws`) and HTTP file endpoints (`/files`, `/upload`).
-- `ductor_bot/cli/`: Claude/Codex/Gemini wrappers, stream-event normalization, auth checks, model caches, process registry.
-- `ductor_bot/cron/`, `webhook/`, `heartbeat/`, `cleanup/`: in-process automation observers.
-- `ductor_bot/workspace/`: path source-of-truth, home defaults sync, rules deployment/sync, skill sync.
-- `ductor_bot/multiagent/`: supervisor, inter-agent bus, internal localhost API bridge, shared-knowledge sync.
-- `ductor_bot/infra/`: PID lock, restart/update state, Docker manager, service backends, observer/task utilities.
+- `botwerk_bot/__main__.py`: thin CLI entrypoint (dispatch) + config loading.
+- `botwerk_bot/cli_commands/`: concrete CLI subcommand implementations (`agents`, `docker`, `service`, `api`, lifecycle/status helpers).
+- `botwerk_bot/bot/`: aiogram handlers, auth/sequencing middleware, streaming dispatch, callback routing, group audit/chat tracking.
+- `botwerk_bot/orchestrator/`: command registry, directives/hooks, normal + streaming + heartbeat flows, provider/session/task wiring.
+- `botwerk_bot/bus/`: central `MessageBus` + `Envelope` + `LockPool` + Telegram transport formatting.
+- `botwerk_bot/session/`: provider-isolated session state keyed by `SessionKey(chat_id, topic_id)` plus named-session registry.
+- `botwerk_bot/tasks/`: shared background task delegation (`TaskHub`) and persistent task registry.
+- `botwerk_bot/api/`: WebSocket ingress (`/ws`) and HTTP file endpoints (`/files`, `/upload`).
+- `botwerk_bot/cli/`: Claude/Codex/Gemini wrappers, stream-event normalization, auth checks, model caches, process registry.
+- `botwerk_bot/cron/`, `webhook/`, `heartbeat/`, `cleanup/`: in-process automation observers.
+- `botwerk_bot/workspace/`: path source-of-truth, home defaults sync, rules deployment/sync, skill sync.
+- `botwerk_bot/multiagent/`: supervisor, inter-agent bus, internal localhost API bridge, shared-knowledge sync.
+- `botwerk_bot/infra/`: PID lock, restart/update state, Docker manager, service backends, observer/task utilities.
 
 Runtime behavior notes:
 

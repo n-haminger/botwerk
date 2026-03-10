@@ -6,19 +6,19 @@ from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
-from ductor_bot.cli.types import CLIResponse
-from ductor_bot.config import AgentConfig
-from ductor_bot.multiagent.bus import AsyncInterAgentResult
-from ductor_bot.orchestrator.core import Orchestrator
-from ductor_bot.orchestrator.injection import (
+from botwerk_bot.cli.types import CLIResponse
+from botwerk_bot.config import AgentConfig
+from botwerk_bot.multiagent.bus import AsyncInterAgentResult
+from botwerk_bot.orchestrator.core import Orchestrator
+from botwerk_bot.orchestrator.injection import (
     _get_or_create_interagent_session,
     _interagent_chat_id,
 )
-from ductor_bot.workspace.paths import DuctorPaths
+from botwerk_bot.workspace.paths import BotwerkPaths
 
 
 @pytest.fixture
-def orch_ia(workspace: tuple[DuctorPaths, AgentConfig]) -> Orchestrator:
+def orch_ia(workspace: tuple[BotwerkPaths, AgentConfig]) -> Orchestrator:
     """Orchestrator with mocked CLIService for inter-agent tests."""
     paths, config = workspace
     config.allowed_user_ids = [12345]
@@ -38,7 +38,7 @@ class TestInteragentChatId:
     def test_returns_first_allowed_user(self, orch_ia: Orchestrator) -> None:
         assert _interagent_chat_id(orch_ia) == 12345
 
-    def test_returns_zero_when_no_users(self, workspace: tuple[DuctorPaths, AgentConfig]) -> None:
+    def test_returns_zero_when_no_users(self, workspace: tuple[BotwerkPaths, AgentConfig]) -> None:
         paths, config = workspace
         config.allowed_user_ids = []
         o = Orchestrator(config, paths)
@@ -275,8 +275,8 @@ class TestHandleAsyncInteragentResult:
         assert "Original task you sent" in request.prompt
 
     async def test_resumes_current_active_session(self, orch_ia: Orchestrator) -> None:
-        from ductor_bot.cli.types import AgentResponse
-        from ductor_bot.session import SessionData
+        from botwerk_bot.cli.types import AgentResponse
+        from botwerk_bot.session import SessionData
 
         sd = SessionData(12345, session_id="active-session-999")
         orch_ia._sessions.get_active = AsyncMock(return_value=sd)

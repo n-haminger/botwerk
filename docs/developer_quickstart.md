@@ -21,26 +21,26 @@ Optional for full runtime validation:
 ## 2) Run the bot
 
 ```bash
-ductor
+botwerk
 ```
 
-First run starts onboarding and writes config to `~/.ductor/config/config.json`.
+First run starts onboarding and writes config to `~/.botwerk/config/config.json`.
 
 Primary runtime files/directories:
 
-- `~/.ductor/sessions.json`
-- `~/.ductor/named_sessions.json`
-- `~/.ductor/tasks.json`
-- `~/.ductor/chat_activity.json`
-- `~/.ductor/cron_jobs.json`
-- `~/.ductor/webhooks.json`
-- `~/.ductor/startup_state.json`
-- `~/.ductor/inflight_turns.json`
-- `~/.ductor/SHAREDMEMORY.md`
-- `~/.ductor/agents.json`
-- `~/.ductor/agents/`
-- `~/.ductor/workspace/`
-- `~/.ductor/logs/agent.log`
+- `~/.botwerk/sessions.json`
+- `~/.botwerk/named_sessions.json`
+- `~/.botwerk/tasks.json`
+- `~/.botwerk/chat_activity.json`
+- `~/.botwerk/cron_jobs.json`
+- `~/.botwerk/webhooks.json`
+- `~/.botwerk/startup_state.json`
+- `~/.botwerk/inflight_turns.json`
+- `~/.botwerk/SHAREDMEMORY.md`
+- `~/.botwerk/agents.json`
+- `~/.botwerk/agents/`
+- `~/.botwerk/workspace/`
+- `~/.botwerk/logs/agent.log`
 
 ## 3) Quality gates
 
@@ -48,7 +48,7 @@ Primary runtime files/directories:
 pytest
 ruff format .
 ruff check .
-mypy ductor_bot
+mypy botwerk_bot
 ```
 
 Expected: zero warnings, zero errors.
@@ -73,71 +73,71 @@ background/async results
 
 Entry + command layer:
 
-- `ductor_bot/__main__.py`
-- `ductor_bot/cli_commands/`
+- `botwerk_bot/__main__.py`
+- `botwerk_bot/cli_commands/`
 
 Runtime hot path:
 
-- `ductor_bot/multiagent/supervisor.py`
-- `ductor_bot/bot/app.py`
-- `ductor_bot/bot/startup.py`
-- `ductor_bot/orchestrator/core.py`
-- `ductor_bot/orchestrator/lifecycle.py`
-- `ductor_bot/orchestrator/flows.py`
+- `botwerk_bot/multiagent/supervisor.py`
+- `botwerk_bot/bot/app.py`
+- `botwerk_bot/bot/startup.py`
+- `botwerk_bot/orchestrator/core.py`
+- `botwerk_bot/orchestrator/lifecycle.py`
+- `botwerk_bot/orchestrator/flows.py`
 
 Delivery/task/session core:
 
-- `ductor_bot/bus/`
-- `ductor_bot/session/manager.py`
-- `ductor_bot/tasks/hub.py`
-- `ductor_bot/tasks/registry.py`
+- `botwerk_bot/bus/`
+- `botwerk_bot/session/manager.py`
+- `botwerk_bot/tasks/hub.py`
+- `botwerk_bot/tasks/registry.py`
 
 Provider/API/workspace core:
 
-- `ductor_bot/cli/service.py` + provider wrappers
-- `ductor_bot/api/server.py`
-- `ductor_bot/workspace/init.py`
-- `ductor_bot/workspace/rules_selector.py`
-- `ductor_bot/workspace/skill_sync.py`
+- `botwerk_bot/cli/service.py` + provider wrappers
+- `botwerk_bot/api/server.py`
+- `botwerk_bot/workspace/init.py`
+- `botwerk_bot/workspace/rules_selector.py`
+- `botwerk_bot/workspace/skill_sync.py`
 
 ## 6) Common debug paths
 
 If command behavior is wrong:
 
-1. `ductor_bot/__main__.py`
-2. `ductor_bot/cli_commands/*`
+1. `botwerk_bot/__main__.py`
+2. `botwerk_bot/cli_commands/*`
 
 If Telegram routing is wrong:
 
-1. `ductor_bot/bot/middleware.py`
-2. `ductor_bot/bot/app.py`
-3. `ductor_bot/orchestrator/commands.py`
-4. `ductor_bot/orchestrator/flows.py`
+1. `botwerk_bot/bot/middleware.py`
+2. `botwerk_bot/bot/app.py`
+3. `botwerk_bot/orchestrator/commands.py`
+4. `botwerk_bot/orchestrator/flows.py`
 
 If Matrix routing is wrong:
 
-1. `ductor_bot/matrix/bot.py`
-2. `ductor_bot/matrix/transport.py`
-3. `ductor_bot/orchestrator/flows.py`
+1. `botwerk_bot/matrix/bot.py`
+2. `botwerk_bot/matrix/transport.py`
+3. `botwerk_bot/orchestrator/flows.py`
 
 If background results look wrong:
 
-1. `ductor_bot/bus/adapters.py`
-2. `ductor_bot/bus/bus.py`
-3. `ductor_bot/bus/telegram_transport.py` (or `ductor_bot/matrix/transport.py`)
+1. `botwerk_bot/bus/adapters.py`
+2. `botwerk_bot/bus/bus.py`
+3. `botwerk_bot/bus/telegram_transport.py` (or `botwerk_bot/matrix/transport.py`)
 
 If tasks are wrong:
 
-1. `ductor_bot/tasks/hub.py`
-2. `ductor_bot/tasks/registry.py`
-3. `ductor_bot/multiagent/internal_api.py`
-4. `ductor_bot/_home_defaults/workspace/tools/task_tools/*.py`
+1. `botwerk_bot/tasks/hub.py`
+2. `botwerk_bot/tasks/registry.py`
+3. `botwerk_bot/multiagent/internal_api.py`
+4. `botwerk_bot/_home_defaults/workspace/tools/task_tools/*.py`
 
 If API is wrong:
 
-1. `ductor_bot/api/server.py`
-2. `ductor_bot/orchestrator/lifecycle.py` (API startup wiring)
-3. `ductor_bot/files/*` (allowed roots, MIME, prompt building)
+1. `botwerk_bot/api/server.py`
+2. `botwerk_bot/orchestrator/lifecycle.py` (API startup wiring)
+3. `botwerk_bot/files/*` (allowed roots, MIME, prompt building)
 
 ## 7) Behavior details to remember
 
@@ -146,7 +146,7 @@ If API is wrong:
 - session identity is topic-aware: `SessionKey(chat_id, topic_id)`.
 - `/model` inside a topic updates only that topic session (not global config).
 - task tools now support permanent single-task removal via `delete_task.py` (`/tasks/delete`).
-- task routing is topic-aware via `thread_id` and `DUCTOR_TOPIC_ID`.
+- task routing is topic-aware via `thread_id` and `BOTWERK_TOPIC_ID`.
 - API auth accepts optional `channel_id` for per-channel session isolation.
 - startup recovery uses `inflight_turns.json` + recovered named sessions.
 - auth allowlists (`allowed_user_ids`, `allowed_group_ids`) are hot-reloadable.

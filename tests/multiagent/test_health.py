@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import time
 
-from ductor_bot.multiagent.health import AgentHealth
+from botwerk_bot.multiagent.health import AgentHealth
 
 
 class TestAgentHealthStates:

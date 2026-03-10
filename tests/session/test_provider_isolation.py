@@ -7,9 +7,9 @@ from typing import Any
 
 import pytest
 
-from ductor_bot.config import AgentConfig
-from ductor_bot.session.key import SessionKey
-from ductor_bot.session.manager import SessionData, SessionManager
+from botwerk_bot.config import AgentConfig
+from botwerk_bot.session.key import SessionKey
+from botwerk_bot.session.manager import SessionData, SessionManager
 
 
 def _make_manager(tmp_path: Path, **overrides: Any) -> SessionManager:

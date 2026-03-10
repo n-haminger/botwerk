@@ -5,8 +5,8 @@ from __future__ import annotations
 import json
 from typing import Any
 
-from ductor_bot.cli.claude_provider import _parse_response
-from ductor_bot.cli.codex_events import parse_codex_jsonl
+from botwerk_bot.cli.claude_provider import _parse_response
+from botwerk_bot.cli.codex_events import parse_codex_jsonl
 
 # -- Claude _parse_response --
 

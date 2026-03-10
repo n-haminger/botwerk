@@ -9,13 +9,13 @@ from unittest.mock import AsyncMock, MagicMock, patch
 import pytest
 import time_machine
 
-from ductor_bot.cli.codex_cache import CodexModelCache
-from ductor_bot.cli.codex_discovery import CodexModelInfo
-from ductor_bot.cli.param_resolver import TaskExecutionConfig, TaskOverrides
-from ductor_bot.config import AgentConfig
-from ductor_bot.cron.execution import OneShotCommand
-from ductor_bot.cron.manager import CronJob, CronManager
-from ductor_bot.cron.observer import CronObserver
+from botwerk_bot.cli.codex_cache import CodexModelCache
+from botwerk_bot.cli.codex_discovery import CodexModelInfo
+from botwerk_bot.cli.param_resolver import TaskExecutionConfig, TaskOverrides
+from botwerk_bot.config import AgentConfig
+from botwerk_bot.cron.execution import OneShotCommand
+from botwerk_bot.cron.manager import CronJob, CronManager
+from botwerk_bot.cron.observer import CronObserver
 
 
 @pytest.fixture
@@ -37,10 +37,10 @@ def mock_codex_cache() -> CodexModelCache:
 @pytest.fixture
 def observer(tmp_path: Path, mock_codex_cache: CodexModelCache) -> CronObserver:
     """Create a CronObserver with mock dependencies."""
-    from ductor_bot.workspace.paths import DuctorPaths
+    from botwerk_bot.workspace.paths import BotwerkPaths
 
     # Mock paths
-    paths = MagicMock(spec=DuctorPaths)
+    paths = MagicMock(spec=BotwerkPaths)
     paths.cron_jobs_path = tmp_path / "cron_jobs.json"
     paths.cron_tasks_dir = tmp_path / "cron_tasks"
     paths.cron_tasks_dir.mkdir(exist_ok=True)
@@ -75,7 +75,7 @@ class TestResolveExecutionConfig:
         """Falls back to global config when no task overrides."""
         overrides = TaskOverrides()
 
-        with patch("ductor_bot.infra.base_task_observer.resolve_cli_config") as mock_resolve:
+        with patch("botwerk_bot.infra.base_task_observer.resolve_cli_config") as mock_resolve:
             mock_resolve.return_value = TaskExecutionConfig(
                 provider="claude",
                 model="opus",
@@ -112,7 +112,7 @@ class TestResolveExecutionConfig:
             cli_parameters=["--fast"],
         )
 
-        with patch("ductor_bot.infra.base_task_observer.resolve_cli_config") as mock_resolve:
+        with patch("botwerk_bot.infra.base_task_observer.resolve_cli_config") as mock_resolve:
             mock_resolve.return_value = TaskExecutionConfig(
                 provider="codex",
                 model="gpt-5.2-codex",
@@ -167,8 +167,8 @@ class TestExecuteJobWithOverrides:
         # Mock CLI execution
         with (
             time_machine.travel(datetime(2026, 1, 15, 14, 0, tzinfo=UTC)),
-            patch("ductor_bot.cron.execution.build_cmd") as mock_build,
-            patch("ductor_bot.infra.base_task_observer.resolve_cli_config") as mock_resolve,
+            patch("botwerk_bot.cron.execution.build_cmd") as mock_build,
+            patch("botwerk_bot.infra.base_task_observer.resolve_cli_config") as mock_resolve,
             patch("asyncio.create_subprocess_exec", new_callable=AsyncMock) as mock_subprocess,
         ):
             # Setup resolve to return config with override
@@ -223,8 +223,8 @@ class TestExecuteJobWithOverrides:
         # Mock CLI execution
         with (
             time_machine.travel(datetime(2026, 1, 15, 14, 0, tzinfo=UTC)),
-            patch("ductor_bot.cron.execution.build_cmd") as mock_build,
-            patch("ductor_bot.infra.base_task_observer.resolve_cli_config") as mock_resolve,
+            patch("botwerk_bot.cron.execution.build_cmd") as mock_build,
+            patch("botwerk_bot.infra.base_task_observer.resolve_cli_config") as mock_resolve,
             patch("asyncio.create_subprocess_exec", new_callable=AsyncMock) as mock_subprocess,
         ):
             # Setup resolve to return config with CLI params
@@ -283,8 +283,8 @@ class TestExecuteJobWithOverrides:
         # Mock CLI execution
         with (
             time_machine.travel(datetime(2026, 1, 15, 14, 0, tzinfo=UTC)),
-            patch("ductor_bot.cron.execution.build_cmd") as mock_build,
-            patch("ductor_bot.infra.base_task_observer.resolve_cli_config") as mock_resolve,
+            patch("botwerk_bot.cron.execution.build_cmd") as mock_build,
+            patch("botwerk_bot.infra.base_task_observer.resolve_cli_config") as mock_resolve,
             patch("asyncio.create_subprocess_exec", new_callable=AsyncMock) as mock_subprocess,
         ):
             # Setup resolve to return Codex config with reasoning effort
@@ -343,8 +343,8 @@ class TestExecuteJobWithOverrides:
         # Mock CLI execution
         with (
             time_machine.travel(datetime(2026, 1, 15, 14, 0, tzinfo=UTC)),
-            patch("ductor_bot.cron.execution.build_cmd") as mock_build,
-            patch("ductor_bot.infra.base_task_observer.resolve_cli_config") as mock_resolve,
+            patch("botwerk_bot.cron.execution.build_cmd") as mock_build,
+            patch("botwerk_bot.infra.base_task_observer.resolve_cli_config") as mock_resolve,
             patch("asyncio.create_subprocess_exec", new_callable=AsyncMock) as mock_subprocess,
         ):
             # Setup resolve to return full config

@@ -8,13 +8,13 @@ from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
-from ductor_bot.cli.executor import (
+from botwerk_bot.cli.executor import (
     SubprocessSpec,
     _stream_with_controller,
     _stream_with_timeout,
 )
-from ductor_bot.cli.stream_events import StreamEvent
-from ductor_bot.cli.timeout_controller import (
+from botwerk_bot.cli.stream_events import StreamEvent
+from botwerk_bot.cli.timeout_controller import (
     TimeoutConfig,
     TimeoutController,
     TimeoutWarning,

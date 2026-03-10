@@ -11,7 +11,7 @@ from pathlib import Path
 
 TOOL_ADD = (
     Path(__file__).resolve().parents[2]
-    / "ductor_bot"
+    / "botwerk_bot"
     / "_home_defaults"
     / "workspace"
     / "tools"
@@ -20,7 +20,7 @@ TOOL_ADD = (
 )
 TOOL_REMOVE = (
     Path(__file__).resolve().parents[2]
-    / "ductor_bot"
+    / "botwerk_bot"
     / "_home_defaults"
     / "workspace"
     / "tools"
@@ -30,7 +30,7 @@ TOOL_REMOVE = (
 
 
 def _run(tmp_path: Path, tool: Path, args: list[str]) -> subprocess.CompletedProcess[str]:
-    env = {**os.environ, "DUCTOR_HOME": str(tmp_path)}
+    env = {**os.environ, "BOTWERK_HOME": str(tmp_path)}
     return subprocess.run(
         [sys.executable, str(tool), *args],
         capture_output=True,

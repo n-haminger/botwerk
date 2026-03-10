@@ -11,24 +11,24 @@ from unittest.mock import AsyncMock, MagicMock, patch
 import pytest
 import time_machine
 
-from ductor_bot.cli.codex_cache import CodexModelCache
-from ductor_bot.config import AgentConfig, WebhookConfig
-from ductor_bot.webhook.manager import WebhookManager
-from ductor_bot.webhook.models import WebhookEntry, WebhookResult, render_template
-from ductor_bot.webhook.observer import _SAFETY_END, _SAFETY_START, WebhookObserver
-from ductor_bot.workspace.paths import DuctorPaths
+from botwerk_bot.cli.codex_cache import CodexModelCache
+from botwerk_bot.config import AgentConfig, WebhookConfig
+from botwerk_bot.webhook.manager import WebhookManager
+from botwerk_bot.webhook.models import WebhookEntry, WebhookResult, render_template
+from botwerk_bot.webhook.observer import _SAFETY_END, _SAFETY_START, WebhookObserver
+from botwerk_bot.workspace.paths import BotwerkPaths
 
 
-def _make_paths(tmp_path: Path) -> DuctorPaths:
+def _make_paths(tmp_path: Path) -> BotwerkPaths:
     fw = tmp_path / "fw"
-    paths = DuctorPaths(
-        ductor_home=tmp_path / "home", home_defaults=fw / "workspace", framework_root=fw
+    paths = BotwerkPaths(
+        botwerk_home=tmp_path / "home", home_defaults=fw / "workspace", framework_root=fw
     )
     paths.cron_tasks_dir.mkdir(parents=True)
     return paths
 
 
-def _make_manager(paths: DuctorPaths) -> WebhookManager:
+def _make_manager(paths: BotwerkPaths) -> WebhookManager:
     return WebhookManager(hooks_path=paths.webhooks_path)
 
 
@@ -58,7 +58,7 @@ def _make_hook(hook_id: str = "test-hook", **overrides: Any) -> WebhookEntry:
 
 
 def _make_observer(
-    paths: DuctorPaths,
+    paths: BotwerkPaths,
     mgr: WebhookManager,
     *,
     codex_cache: CodexModelCache | None = None,
@@ -315,7 +315,7 @@ class TestDispatchCronTask:
 
         with (
             time_machine.travel(datetime(2026, 1, 15, 14, 0, tzinfo=UTC)),
-            patch("ductor_bot.cron.execution.which", return_value=None),
+            patch("botwerk_bot.cron.execution.which", return_value=None),
         ):
             result = await observer._dispatch("ct-hook", {"msg": "go"})
 
@@ -334,7 +334,7 @@ class TestDispatchCronTask:
 
         with (
             time_machine.travel(datetime(2026, 1, 15, 14, 0, tzinfo=UTC)),
-            patch("ductor_bot.cron.execution.which", return_value="/usr/bin/claude"),
+            patch("botwerk_bot.cron.execution.which", return_value="/usr/bin/claude"),
             patch("asyncio.create_subprocess_exec", return_value=mock_proc) as exec_mock,
         ):
             result = await observer._dispatch("ct-hook", {"msg": "go"})
@@ -356,7 +356,7 @@ class TestDispatchCronTask:
 
         with (
             time_machine.travel(datetime(2026, 1, 15, 14, 0, tzinfo=UTC)),
-            patch("ductor_bot.cron.execution.which", return_value="/usr/bin/claude"),
+            patch("botwerk_bot.cron.execution.which", return_value="/usr/bin/claude"),
             patch("asyncio.create_subprocess_exec", return_value=mock_proc),
         ):
             result = await observer._dispatch("ct-hook", {"msg": "go"})
@@ -390,7 +390,7 @@ class TestDispatchCronTask:
 
         with (
             time_machine.travel(datetime(2026, 1, 15, 14, 0, tzinfo=UTC)),
-            patch("ductor_bot.cron.execution.which", return_value="/usr/bin/claude"),
+            patch("botwerk_bot.cron.execution.which", return_value="/usr/bin/claude"),
             patch("asyncio.create_subprocess_exec", return_value=mock_proc),
         ):
             result = await observer._dispatch("ct-hook", {"msg": "go"})
@@ -411,7 +411,7 @@ class TestDispatchCronTask:
 
         with (
             time_machine.travel(datetime(2026, 1, 15, 14, 0, tzinfo=UTC)),
-            patch("ductor_bot.cron.execution.which", return_value="/usr/bin/claude"),
+            patch("botwerk_bot.cron.execution.which", return_value="/usr/bin/claude"),
             patch("asyncio.create_subprocess_exec", return_value=mock_proc) as exec_mock,
         ):
             await observer._dispatch("ct-hook", {"msg": "go"})

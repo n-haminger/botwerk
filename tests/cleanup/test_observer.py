@@ -7,9 +7,9 @@ from datetime import UTC
 from pathlib import Path
 from unittest.mock import patch
 
-from ductor_bot.cleanup.observer import CleanupObserver, _delete_old_files
-from ductor_bot.config import AgentConfig, CleanupConfig
-from ductor_bot.workspace.paths import DuctorPaths
+from botwerk_bot.cleanup.observer import CleanupObserver, _delete_old_files
+from botwerk_bot.config import AgentConfig, CleanupConfig
+from botwerk_bot.workspace.paths import BotwerkPaths
 
 # -- _delete_old_files (sync helper) --
 
@@ -91,8 +91,8 @@ def _make_config(*, enabled: bool = True, check_hour: int = 3) -> AgentConfig:
     )
 
 
-def _make_paths(tmp_path: Path) -> DuctorPaths:
-    return DuctorPaths(ductor_home=tmp_path)
+def _make_paths(tmp_path: Path) -> BotwerkPaths:
+    return BotwerkPaths(botwerk_home=tmp_path)
 
 
 async def test_start_disabled_does_not_spawn_task(tmp_path: Path) -> None:
@@ -148,7 +148,7 @@ async def test_maybe_run_skips_wrong_hour(tmp_path: Path) -> None:
     from datetime import datetime
 
     fake_now = datetime(2025, 6, 1, 10, 0, tzinfo=UTC)
-    with patch("ductor_bot.cleanup.observer.datetime") as mock_dt:
+    with patch("botwerk_bot.cleanup.observer.datetime") as mock_dt:
         mock_dt.now.return_value = fake_now
         mock_dt.side_effect = lambda *a, **kw: datetime(*a, **kw)  # noqa: DTZ001, PLW0108
         await observer._maybe_run()
@@ -166,7 +166,7 @@ async def test_maybe_run_skips_duplicate_same_day(tmp_path: Path) -> None:
     from datetime import datetime
 
     fake_now = datetime(2025, 6, 1, 3, 30, tzinfo=UTC)
-    with patch("ductor_bot.cleanup.observer.datetime") as mock_dt:
+    with patch("botwerk_bot.cleanup.observer.datetime") as mock_dt:
         mock_dt.now.return_value = fake_now
         mock_dt.side_effect = lambda *a, **kw: datetime(*a, **kw)  # noqa: DTZ001, PLW0108
         await observer._maybe_run()

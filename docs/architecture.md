@@ -2,7 +2,7 @@
 
 ## Runtime Overview
 
-ductor supports multiple messaging transports. The `transport` config field (`"telegram"` or `"matrix"`) selects the ingress/delivery layer via a transport registry (`transport_registry.py`).
+botwerk supports multiple messaging transports. The `transport` config field (`"telegram"` or `"matrix"`) selects the ingress/delivery layer via a transport registry (`transport_registry.py`).
 
 ```text
 Telegram path:                          Matrix path:
@@ -37,7 +37,7 @@ Both implement `BotProtocol`. Adding a new transport requires only a new factory
 
 ## Startup Flow
 
-### `ductor` entry (`ductor_bot/__main__.py`)
+### `botwerk` entry (`botwerk_bot/__main__.py`)
 
 1. parse CLI args and dispatch command (implementation in `cli_commands/*`)
 2. default run path:
@@ -79,7 +79,7 @@ Matrix startup follows a similar pattern (orchestrator creation, bus wiring, obs
 
 ### Orchestrator factory (`orchestrator/lifecycle.py`)
 
-1. resolve paths and set `DUCTOR_HOME` for main agent
+1. resolve paths and set `BOTWERK_HOME` for main agent
 2. optional Docker setup + Docker-mode skill resync
 3. inject runtime environment note into workspace rule files
 4. instantiate `Orchestrator`
@@ -170,11 +170,11 @@ Gemini safeguard:
 
 ### Delegated tasks (`TaskHub`)
 
-- shared registry: `~/.ductor/tasks.json`
-- folders: `~/.ductor/workspace/tasks/<task_id>/`
+- shared registry: `~/.botwerk/tasks.json`
+- folders: `~/.botwerk/workspace/tasks/<task_id>/`
 - endpoints via internal API (`/tasks/*`)
 - topic-aware routing: task results/questions retain `thread_id` and are injected back into originating topic session
-- task tools receive `DUCTOR_CHAT_ID` and optional `DUCTOR_TOPIC_ID`
+- task tools receive `BOTWERK_CHAT_ID` and optional `BOTWERK_TOPIC_ID`
 - single-task permanent delete: `/tasks/delete` + `TaskRegistry.delete()`
 
 ## MessageBus and Delivery
@@ -231,7 +231,7 @@ Shutdown (`orchestrator/lifecycle.shutdown`):
 
 ## Workspace Seeding Model
 
-Source: `ductor_bot/_home_defaults/`.
+Source: `botwerk_bot/_home_defaults/`.
 
 Zone rules (`workspace/init.py`):
 
@@ -252,4 +252,4 @@ Rule sync:
 - all stacks share one event loop, inter-agent bus, and optional shared task hub
 - async inter-agent results are injected via bus envelopes
 - provider switch during `ia-<sender>` conversations auto-resets that named session and surfaces a provider-switch notice
-- optional Linux user isolation (`linux_user: true`): CLI subprocesses run as `ductor-<name>` via `sudo -u`, providing file-level access separation between agents
+- optional Linux user isolation (`linux_user: true`): CLI subprocesses run as `botwerk-<name>` via `sudo -u`, providing file-level access separation between agents

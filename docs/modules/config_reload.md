@@ -4,13 +4,13 @@ Centralized runtime config hot-reload watcher.
 
 ## File
 
-- `ductor_bot/config_reload.py`: `ConfigReloader`, config diff/classification helpers
+- `botwerk_bot/config_reload.py`: `ConfigReloader`, config diff/classification helpers
 
 ## Purpose
 
 Avoid unnecessary restarts when safe `config.json` fields change.
 
-`ConfigReloader` polls `~/.ductor/config/config.json` every 5 seconds, validates with `AgentConfig`, diffs top-level schema fields, and:
+`ConfigReloader` polls `~/.botwerk/config/config.json` every 5 seconds, validates with `AgentConfig`, diffs top-level schema fields, and:
 
 - applies hot-reloadable fields immediately,
 - logs restart-required field changes through callback.
@@ -40,7 +40,7 @@ Important runtime nuance:
 
 - `telegram_token`
 - `docker`, `api`, `webhooks`
-- `ductor_home`, `log_level`, `gemini_api_key`, `timeouts`, `tasks`
+- `botwerk_home`, `log_level`, `gemini_api_key`, `timeouts`, `tasks`
 - restart classification is schema-based over `AgentConfig` top-level fields
 
 Timeout note:

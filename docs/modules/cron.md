@@ -33,7 +33,7 @@ Scheduling guards:
 
 ## Persistence
 
-File: `~/.ductor/cron_jobs.json`
+File: `~/.botwerk/cron_jobs.json`
 
 - format: `{ "jobs": [...] }`
 - atomic writes via temp+replace

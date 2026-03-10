@@ -79,7 +79,7 @@ Implications:
 
 ## Group management (`/where`, `/leave`, audits)
 
-`ChatTracker` stores activity in `~/.ductor/chat_activity.json`.
+`ChatTracker` stores activity in `~/.botwerk/chat_activity.json`.
 
 - join/reject/leave events are persisted
 - `/where` shows active/rejected/left groups

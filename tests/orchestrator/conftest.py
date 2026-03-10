@@ -7,17 +7,17 @@ from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
-from ductor_bot.config import AgentConfig
-from ductor_bot.orchestrator.core import Orchestrator
-from ductor_bot.workspace.init import init_workspace
-from ductor_bot.workspace.paths import DuctorPaths
+from botwerk_bot.config import AgentConfig
+from botwerk_bot.orchestrator.core import Orchestrator
+from botwerk_bot.workspace.init import init_workspace
+from botwerk_bot.workspace.paths import BotwerkPaths
 
 
 def setup_framework(fw_root: Path) -> None:
     """Create minimal home-defaults template for testing."""
     ws = fw_root / "workspace"
     ws.mkdir(parents=True)
-    (ws / "CLAUDE.md").write_text("# Ductor Home")
+    (ws / "CLAUDE.md").write_text("# Botwerk Home")
 
     config_dir = ws / "config"
     config_dir.mkdir()
@@ -41,12 +41,12 @@ def setup_framework(fw_root: Path) -> None:
 
 
 @pytest.fixture
-def workspace(tmp_path: Path) -> tuple[DuctorPaths, AgentConfig]:
+def workspace(tmp_path: Path) -> tuple[BotwerkPaths, AgentConfig]:
     """Fully initialized workspace with models and config."""
     fw_root = tmp_path / "fw"
     setup_framework(fw_root)
-    paths = DuctorPaths(
-        ductor_home=tmp_path / "home", home_defaults=fw_root / "workspace", framework_root=fw_root
+    paths = BotwerkPaths(
+        botwerk_home=tmp_path / "home", home_defaults=fw_root / "workspace", framework_root=fw_root
     )
     init_workspace(paths)
     config = AgentConfig()
@@ -54,7 +54,7 @@ def workspace(tmp_path: Path) -> tuple[DuctorPaths, AgentConfig]:
 
 
 @pytest.fixture
-def orch(workspace: tuple[DuctorPaths, AgentConfig]) -> Orchestrator:
+def orch(workspace: tuple[BotwerkPaths, AgentConfig]) -> Orchestrator:
     """Orchestrator with mocked CLIService."""
     paths, config = workspace
     o = Orchestrator(config, paths)
