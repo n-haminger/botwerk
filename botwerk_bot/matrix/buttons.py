@@ -28,7 +28,7 @@ REACTION_DIGITS: list[str] = [
     "7\ufe0f\u20e3",  # 7️⃣
     "8\ufe0f\u20e3",  # 8️⃣
     "9\ufe0f\u20e3",  # 9️⃣
-    "\U0001f51f",      # 🔟
+    "\U0001f51f",  # 🔟
 ]
 
 

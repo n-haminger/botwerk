@@ -13,7 +13,6 @@ from botwerk_bot.matrix.media import (
     resolve_matrix_media,
 )
 
-
 # ---------------------------------------------------------------------------
 # Pure function tests
 # ---------------------------------------------------------------------------
@@ -121,7 +120,9 @@ class TestDownloadMatrixMedia:
         resp.message = None
         client.download.return_value = resp
 
-        with patch("botwerk_bot.matrix.media._prepare_destination", return_value=tmp_path / "report.pdf"):
+        with patch(
+            "botwerk_bot.matrix.media._prepare_destination", return_value=tmp_path / "report.pdf"
+        ):
             result = await download_matrix_media(client, event, tmp_path)
 
         assert result is not None
@@ -147,7 +148,10 @@ class TestResolveMatrixMedia:
             side_effect=OSError("disk full"),
         ):
             result = await resolve_matrix_media(
-                client, event, tmp_path, tmp_path,
+                client,
+                event,
+                tmp_path,
+                tmp_path,
                 error_callback=callback,
             )
 
@@ -179,11 +183,14 @@ class TestResolveMatrixMedia:
             original_type="photo",
         )
 
-        with patch(
-            "botwerk_bot.matrix.media.download_matrix_media",
-            return_value=info,
-        ), patch(
-            "botwerk_bot.matrix.media._update_index",
+        with (
+            patch(
+                "botwerk_bot.matrix.media.download_matrix_media",
+                return_value=info,
+            ),
+            patch(
+                "botwerk_bot.matrix.media._update_index",
+            ),
         ):
             result = await resolve_matrix_media(client, event, tmp_path, tmp_path)
 

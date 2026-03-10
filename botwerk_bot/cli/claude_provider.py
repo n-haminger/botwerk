@@ -15,7 +15,11 @@ from botwerk_bot.cli.base import (
     CLIConfig,
     wrap_command,
 )
-from botwerk_bot.cli.executor import SubprocessSpec, run_oneshot_subprocess, run_streaming_subprocess
+from botwerk_bot.cli.executor import (
+    SubprocessSpec,
+    run_oneshot_subprocess,
+    run_streaming_subprocess,
+)
 from botwerk_bot.cli.stream_events import (
     StreamEvent,
     parse_stream_line,

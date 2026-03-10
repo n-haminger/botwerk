@@ -55,7 +55,11 @@ async def send_rich(
 
     if cleaned:
         # Split if too large (rare for Matrix)
-        chunks = _split_text(plain, html_body) if len(html_body.encode()) > _MAX_EVENT_SIZE else [(plain, html_body)]
+        chunks = (
+            _split_text(plain, html_body)
+            if len(html_body.encode()) > _MAX_EVENT_SIZE
+            else [(plain, html_body)]
+        )
 
         for p, h in chunks:
             content: dict[str, object] = {
@@ -92,8 +96,7 @@ async def send_rich(
         # Check allowed roots
         if opts.allowed_roots is not None:
             if not any(
-                file_path.resolve().is_relative_to(root.resolve())
-                for root in opts.allowed_roots
+                file_path.resolve().is_relative_to(root.resolve()) for root in opts.allowed_roots
             ):
                 logger.warning("File outside allowed roots: %s", file_path)
                 continue
@@ -155,9 +158,7 @@ async def _upload_and_send_file(
     return None
 
 
-def _split_text(
-    plain: str, html_body: str
-) -> list[tuple[str, str]]:
+def _split_text(plain: str, html_body: str) -> list[tuple[str, str]]:
     """Split text into chunks that fit within the Matrix event size limit.
 
     Splits the raw plain text by lines and converts each chunk independently

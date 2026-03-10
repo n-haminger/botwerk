@@ -61,7 +61,9 @@ class MatrixNotificationService:
             event_id = await matrix_send_rich(self._bot.client, room_id, text)
             self._bot._track_sent_event(event_id)
         else:
-            logger.warning("notify: cannot resolve chat_id=%d to room, falling back to notify_all", chat_id)
+            logger.warning(
+                "notify: cannot resolve chat_id=%d to room, falling back to notify_all", chat_id
+            )
             await self.notify_all(text)
 
     async def notify_all(self, text: str) -> None:
@@ -315,7 +317,10 @@ class MatrixBot:
             await self._send_rich(room_id, msg)
 
         text = await resolve_matrix_media(
-            self._client, event, paths.matrix_files_dir, paths.workspace,
+            self._client,
+            event,
+            paths.matrix_files_dir,
+            paths.workspace,
             error_callback=_on_error,
         )
 
@@ -329,18 +334,27 @@ class MatrixBot:
         )
 
     # Commands routed to the orchestrator's CommandRegistry
-    _ORCHESTRATOR_COMMANDS = frozenset({
-        "status", "model", "memory", "cron", "diagnose", "upgrade",
-        "sessions", "tasks", "agents", "agent_start", "agent_stop",
-        "agent_restart",
-    })
+    _ORCHESTRATOR_COMMANDS = frozenset(
+        {
+            "status",
+            "model",
+            "memory",
+            "cron",
+            "diagnose",
+            "upgrade",
+            "sessions",
+            "tasks",
+            "agents",
+            "agent_start",
+            "agent_stop",
+            "agent_restart",
+        }
+    )
 
-    async def _handle_command(
-        self, text: str, room_id: str, chat_id: int, event: object
-    ) -> None:
+    async def _handle_command(self, text: str, room_id: str, chat_id: int, event: object) -> None:
         """Handle commands in Matrix. Supports both !cmd and /cmd prefixes."""
         # Normalize: strip prefix, extract command name
-        cmd = text.split()[0].lower().lstrip("/!")
+        cmd = text.split(maxsplit=1)[0].lower().lstrip("/!")
         # Ensure text has / prefix for orchestrator compatibility
         if text.startswith("!"):
             text = "/" + text[1:]
@@ -357,7 +371,11 @@ class MatrixBot:
                 # orchestrator — run as a background task with the lock.
                 asyncio.create_task(
                     self._run_handler_with_lock(
-                        handler, text=text, room_id=room_id, key=key, event=event,
+                        handler,
+                        text=text,
+                        room_id=room_id,
+                        key=key,
+                        event=event,
                     ),
                     name=f"mx-cmd-{cmd}",
                 )
@@ -383,14 +401,20 @@ class MatrixBot:
             msg = f"Stopped {killed} process(es)." if killed else "No active processes."
             await self._send_rich(room_id, msg)
 
-    async def _cmd_interrupt(self, *, text: str, room_id: str, key: SessionKey, event: object) -> None:
+    async def _cmd_interrupt(
+        self, *, text: str, room_id: str, key: SessionKey, event: object
+    ) -> None:
         orch = self._orchestrator
         if orch:
             interrupted = orch.interrupt(key.chat_id)
-            msg = f"Interrupted {interrupted} process(es)." if interrupted else "No active processes."
+            msg = (
+                f"Interrupted {interrupted} process(es)." if interrupted else "No active processes."
+            )
             await self._send_rich(room_id, msg)
 
-    async def _cmd_stop_all(self, *, text: str, room_id: str, key: SessionKey, event: object) -> None:
+    async def _cmd_stop_all(
+        self, *, text: str, room_id: str, key: SessionKey, event: object
+    ) -> None:
         orch = self._orchestrator
         killed = 0
         if orch:
@@ -400,7 +424,9 @@ class MatrixBot:
         msg = f"Stopped {killed} process(es)." if killed else "No active processes."
         await self._send_rich(room_id, msg)
 
-    async def _cmd_restart(self, *, text: str, room_id: str, key: SessionKey, event: object) -> None:
+    async def _cmd_restart(
+        self, *, text: str, room_id: str, key: SessionKey, event: object
+    ) -> None:
         from botwerk_bot.infra.restart import EXIT_RESTART, write_restart_marker
 
         home = Path(self._config.botwerk_home).expanduser()
@@ -434,7 +460,9 @@ class MatrixBot:
         )
         await self._send_rich(room_id, text_out)
 
-    async def _cmd_agent_commands(self, *, text: str, room_id: str, key: SessionKey, event: object) -> None:
+    async def _cmd_agent_commands(
+        self, *, text: str, room_id: str, key: SessionKey, event: object
+    ) -> None:
         lines = [
             "The multi-agent system lets you run additional bots as "
             "sub-agents — each with its own workspace and user list. "
@@ -456,20 +484,24 @@ class MatrixBot:
             fmt("**Multi-Agent System**", SEP, "\n".join(lines)),
         )
 
-    async def _cmd_showfiles(self, *, text: str, room_id: str, key: SessionKey, event: object) -> None:
+    async def _cmd_showfiles(
+        self, *, text: str, room_id: str, key: SessionKey, event: object
+    ) -> None:
         await self._send_rich(
             room_id,
-            "File browser is not yet supported in Matrix. "
-            "Use `!status` to see workspace info.",
+            "File browser is not yet supported in Matrix. Use `!status` to see workspace info.",
         )
 
-    async def _cmd_session(self, *, text: str, room_id: str, key: SessionKey, event: object) -> None:
+    async def _cmd_session(
+        self, *, text: str, room_id: str, key: SessionKey, event: object
+    ) -> None:
         parts = text.split(None, 1)
         if len(parts) < 2 or not parts[1].strip():
             await self._send_rich(
                 room_id,
                 fmt(
-                    "**Background Sessions**", SEP,
+                    "**Background Sessions**",
+                    SEP,
                     "`!session <prompt>` — start a background session\n"
                     "`!sessions` — view and manage all sessions\n"
                     "`!stop` — cancel running session",
@@ -479,7 +511,9 @@ class MatrixBot:
         # Session with prompt — route to orchestrator as conversation
         await self._dispatch_message(key, text, room_id, event)
 
-    async def _cmd_orchestrator(self, *, text: str, room_id: str, key: SessionKey, event: object) -> None:
+    async def _cmd_orchestrator(
+        self, *, text: str, room_id: str, key: SessionKey, event: object
+    ) -> None:
         orch = self._orchestrator
         if not orch:
             return
@@ -517,7 +551,9 @@ class MatrixBot:
         async with lock:
             await self._cmd_orchestrator(text=text, room_id=room_id, key=key, event=event)
 
-    async def _dispatch_message(self, key: SessionKey, text: str, room_id: str, event: object) -> None:
+    async def _dispatch_message(
+        self, key: SessionKey, text: str, room_id: str, event: object
+    ) -> None:
         """Route a message through streaming or non-streaming pipeline."""
         if self._config.streaming.enabled:
             await self._run_streaming(key, text, room_id, event)
@@ -541,10 +577,19 @@ class MatrixBot:
 
     # Commands that run immediately without the per-chat lock.
     # These must be fast and non-blocking (no CLI calls).
-    _IMMEDIATE_COMMANDS: frozenset[str] = frozenset({
-        "stop", "stop_all", "interrupt", "restart",
-        "help", "start", "info", "agent_commands", "showfiles",
-    })
+    _IMMEDIATE_COMMANDS: frozenset[str] = frozenset(
+        {
+            "stop",
+            "stop_all",
+            "interrupt",
+            "restart",
+            "help",
+            "start",
+            "info",
+            "agent_commands",
+            "showfiles",
+        }
+    )
 
     def _build_help_text(self) -> str:
         """Build the help text showing all available commands."""
@@ -568,9 +613,7 @@ class MatrixBot:
             "Use `!` or `/` prefix. Send any message to start.",
         )
 
-    async def _run_streaming(
-        self, key: SessionKey, text: str, room_id: str, event: object
-    ) -> None:
+    async def _run_streaming(self, key: SessionKey, text: str, room_id: str, event: object) -> None:
         """Run with streaming — each reasoning segment as a separate message."""
         orch = self._orchestrator
         if orch is None:
@@ -595,9 +638,7 @@ class MatrixBot:
             buffer[0] = ""
             # Re-set typing indicator (sending messages clears it in Matrix)
             with contextlib.suppress(Exception):
-                await self._client.room_typing(
-                    room_id, typing_state=True, timeout=30000
-                )
+                await self._client.room_typing(room_id, typing_state=True, timeout=30000)
 
         async def _on_tool(tool_name: str) -> None:
             segment_count[0] += 1
@@ -818,7 +859,9 @@ class MatrixBot:
         logger.info("Reaction button match: room=%s key=%s cb=%s", room_id, event.key, cb)
         await self._handle_button_callback(room_id, event.reacts_to, cb)
 
-    async def _handle_button_callback(self, room_id: str, message_event_id: str, callback_data: str) -> None:
+    async def _handle_button_callback(
+        self, room_id: str, message_event_id: str, callback_data: str
+    ) -> None:
         """Route a button callback_data through the selector handlers."""
         from botwerk_bot.orchestrator.selectors.cron_selector import (
             handle_cron_callback,
@@ -887,7 +930,9 @@ class MatrixBot:
                     state_key="",
                 )
                 if isinstance(resp, RoomPutStateError):
-                    logger.warning("Could not pin join notification in %s: %s", room_id, resp.message)
+                    logger.warning(
+                        "Could not pin join notification in %s: %s", room_id, resp.message
+                    )
             except Exception:
                 logger.warning("Failed to pin join notification in %s", room_id, exc_info=True)
 
@@ -959,7 +1004,10 @@ class MatrixBot:
 
         chat_id = self._default_chat_id()
         if not chat_id:
-            logger.warning("No chat_id for async interagent result (task=%s) — delivering to all rooms", result.task_id)
+            logger.warning(
+                "No chat_id for async interagent result (task=%s) — delivering to all rooms",
+                result.task_id,
+            )
             text = result.result_text or f"Inter-agent result from {result.recipient}"
             await self._notification_service.notify_all(text)
             return

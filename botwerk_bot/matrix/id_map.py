@@ -29,14 +29,10 @@ class MatrixIdMap:
         if room_id in self._room_to_int:
             return self._room_to_int[room_id]
 
-        h = int.from_bytes(
-            hashlib.sha256(room_id.encode()).digest()[:8], "big"
-        )
+        h = int.from_bytes(hashlib.sha256(room_id.encode()).digest()[:8], "big")
         # Collision guard: if hash maps to a different room, rehash with salt
         while h in self._int_to_room and self._int_to_room[h] != room_id:
-            h = int.from_bytes(
-                hashlib.sha256(f"{room_id}:{h}".encode()).digest()[:8], "big"
-            )
+            h = int.from_bytes(hashlib.sha256(f"{room_id}:{h}".encode()).digest()[:8], "big")
 
         self._room_to_int[room_id] = h
         self._int_to_room[h] = room_id

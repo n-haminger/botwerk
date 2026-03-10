@@ -342,8 +342,10 @@ async def normal(
         response = await orch._cli_service.execute(request)
         session_recovered = False
         _reg = orch._process_registry
-        if not _reg.was_aborted(key.chat_id) and not _reg.was_interrupted(key.chat_id) and _needs_session_recovery(
-            response
+        if (
+            not _reg.was_aborted(key.chat_id)
+            and not _reg.was_interrupted(key.chat_id)
+            and _needs_session_recovery(response)
         ):
             session_recovered = _is_invalid_session(response)
             reason = "invalid_session" if session_recovered else "sigkill"
@@ -406,8 +408,10 @@ async def normal_streaming(
             on_system_status=cb.on_system_status,
         )
         _reg = orch._process_registry
-        if not _reg.was_aborted(key.chat_id) and not _reg.was_interrupted(key.chat_id) and _needs_session_recovery(
-            response
+        if (
+            not _reg.was_aborted(key.chat_id)
+            and not _reg.was_interrupted(key.chat_id)
+            and _needs_session_recovery(response)
         ):
             reason = "invalid_session" if _is_invalid_session(response) else "sigkill"
             ctx = _RecoveryContext(

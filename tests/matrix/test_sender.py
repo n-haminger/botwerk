@@ -12,7 +12,6 @@ from botwerk_bot.matrix.sender import (
     send_rich,
 )
 
-
 # ---------------------------------------------------------------------------
 # send_rich
 # ---------------------------------------------------------------------------
@@ -149,7 +148,7 @@ class TestUploadAndSendFile:
         send_resp.event_id = "$ev_csv"
         client.room_send.return_value = send_resp
 
-        event_id = await _upload_and_send_file(client, "!room:test", test_file)
+        await _upload_and_send_file(client, "!room:test", test_file)
 
         content = client.room_send.call_args[0][2]
         assert content["msgtype"] == "m.file"

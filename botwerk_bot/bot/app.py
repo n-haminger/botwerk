@@ -65,13 +65,13 @@ from botwerk_bot.bus.lock_pool import LockPool
 from botwerk_bot.commands import BOT_COMMANDS as _COMMAND_DEFS
 from botwerk_bot.commands import MULTIAGENT_SUB_COMMANDS as _MA_SUB_DEFS
 from botwerk_bot.config import AgentConfig
-from botwerk_bot.notifications import NotificationService
 from botwerk_bot.files.allowed_roots import resolve_allowed_roots
 from botwerk_bot.infra.restart import EXIT_RESTART, consume_restart_marker
 from botwerk_bot.infra.updater import UpdateObserver
 from botwerk_bot.infra.version import VersionInfo, get_current_version
 from botwerk_bot.log_context import set_log_context
 from botwerk_bot.multiagent.bus import AsyncInterAgentResult
+from botwerk_bot.notifications import NotificationService
 from botwerk_bot.session.key import SessionKey
 from botwerk_bot.tasks.models import TaskResult
 from botwerk_bot.text.response_format import SEP, fmt
@@ -376,9 +376,7 @@ class TelegramBot:
         msg = await _send_text_chunks(self._bot, chat_id, text)
         if msg:
             with contextlib.suppress(TelegramAPIError):
-                await self._bot.pin_chat_message(
-                    chat_id, msg.message_id, disable_notification=True
-                )
+                await self._bot.pin_chat_message(chat_id, msg.message_id, disable_notification=True)
 
     _GROUP_AUDIT_INTERVAL = 86400  # 24 hours
 

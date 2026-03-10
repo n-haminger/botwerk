@@ -70,7 +70,8 @@ class TestRegisterButtons:
     def test_register_and_match_reaction(self) -> None:
         bt = ButtonTracker()
         bt.register_buttons(
-            "!room:s", "$evt1",
+            "!room:s",
+            "$evt1",
             labels=["CLAUDE", "CODEX"],
             callback_data=["ms:p:claude", "ms:p:codex"],
         )
@@ -79,7 +80,8 @@ class TestRegisterButtons:
     def test_reaction_second_option(self) -> None:
         bt = ButtonTracker()
         bt.register_buttons(
-            "!room:s", "$evt1",
+            "!room:s",
+            "$evt1",
             labels=["CLAUDE", "CODEX", "GEMINI"],
             callback_data=["ms:p:claude", "ms:p:codex", "ms:p:gemini"],
         )
@@ -88,24 +90,30 @@ class TestRegisterButtons:
     def test_reaction_wrong_event_id(self) -> None:
         bt = ButtonTracker()
         bt.register_buttons(
-            "!room:s", "$evt1",
-            labels=["A"], callback_data=["cb:a"],
+            "!room:s",
+            "$evt1",
+            labels=["A"],
+            callback_data=["cb:a"],
         )
         assert bt.match_reaction("!room:s", "$wrong", REACTION_DIGITS[0]) is None
 
     def test_reaction_wrong_emoji(self) -> None:
         bt = ButtonTracker()
         bt.register_buttons(
-            "!room:s", "$evt1",
-            labels=["A"], callback_data=["cb:a"],
+            "!room:s",
+            "$evt1",
+            labels=["A"],
+            callback_data=["cb:a"],
         )
         assert bt.match_reaction("!room:s", "$evt1", "👍") is None
 
     def test_reaction_consumes_buttons(self) -> None:
         bt = ButtonTracker()
         bt.register_buttons(
-            "!room:s", "$evt1",
-            labels=["A", "B"], callback_data=["cb:a", "cb:b"],
+            "!room:s",
+            "$evt1",
+            labels=["A", "B"],
+            callback_data=["cb:a", "cb:b"],
         )
         bt.match_reaction("!room:s", "$evt1", REACTION_DIGITS[0])
         assert bt.match_reaction("!room:s", "$evt1", REACTION_DIGITS[1]) is None
@@ -113,8 +121,10 @@ class TestRegisterButtons:
     def test_reaction_wrong_room(self) -> None:
         bt = ButtonTracker()
         bt.register_buttons(
-            "!room:s", "$evt1",
-            labels=["A"], callback_data=["cb:a"],
+            "!room:s",
+            "$evt1",
+            labels=["A"],
+            callback_data=["cb:a"],
         )
         assert bt.match_reaction("!other:s", "$evt1", REACTION_DIGITS[0]) is None
 
@@ -122,7 +132,8 @@ class TestRegisterButtons:
         """Typed number still works for registered buttons."""
         bt = ButtonTracker()
         bt.register_buttons(
-            "!room:s", "$evt1",
+            "!room:s",
+            "$evt1",
             labels=["CLAUDE", "CODEX"],
             callback_data=["ms:p:claude", "ms:p:codex"],
         )

@@ -7,8 +7,9 @@ import contextlib
 from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
-    from nio import AsyncClient
     from types import TracebackType
+
+    from nio import AsyncClient
 
 
 class MatrixTypingContext:
@@ -45,9 +46,7 @@ class MatrixTypingContext:
 
     async def __aenter__(self) -> MatrixTypingContext:
         with contextlib.suppress(Exception):
-            await self._client.room_typing(
-                self._room_id, typing_state=True, timeout=self._timeout
-            )
+            await self._client.room_typing(self._room_id, typing_state=True, timeout=self._timeout)
         self._task = asyncio.create_task(self._keep_alive())
         return self
 

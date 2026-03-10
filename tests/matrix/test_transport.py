@@ -495,7 +495,9 @@ class TestBroadcastRooms:
         bot.config.matrix.allowed_rooms = []
         bot._last_active_room = None
 
-        with patch("botwerk_bot.matrix.transport.matrix_send_rich", new_callable=AsyncMock) as mock_send:
+        with patch(
+            "botwerk_bot.matrix.transport.matrix_send_rich", new_callable=AsyncMock
+        ) as mock_send:
             await transport._broadcast("lost message")
 
         mock_send.assert_not_awaited()

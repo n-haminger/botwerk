@@ -407,9 +407,7 @@ class InternalAgentAPI:
         cancelled = await self._task_hub.cancel(task_id)
         return web.json_response({"success": cancelled})
 
-    async def _handle_task_delete(  # noqa: PLR0911
-        self, request: web.Request
-    ) -> web.Response:
+    async def _handle_task_delete(self, request: web.Request) -> web.Response:
         """POST /tasks/delete — permanently delete a finished task (entry + folder)."""
         if self._task_hub is None:
             return web.json_response(

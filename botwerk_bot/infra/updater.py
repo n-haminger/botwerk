@@ -244,8 +244,7 @@ async def perform_upgrade_pipeline(
     combined = _combine_outputs(outputs)
     if "No matching distribution found" in combined:
         outputs.append(
-            "The release archive may not be available yet. "
-            "Please try again in a few minutes."
+            "The release archive may not be available yet. Please try again in a few minutes."
         )
 
     return False, current_version, _combine_outputs(outputs)

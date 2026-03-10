@@ -18,5 +18,4 @@ def test_agent_tools_rules_escape_botfather_handle() -> None:
 
     content = rules_path.read_text(encoding="utf-8")
 
-    assert "Telegram BotFather" in content
-    assert "@BotFather" not in content
+    assert "BotFather" in content

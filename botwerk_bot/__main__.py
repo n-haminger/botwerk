@@ -233,7 +233,9 @@ def _validate_matrix_config(config: AgentConfig) -> None:
         _console.print(f"[bold yellow]Matrix user_id is required.{hint}[/bold yellow]")
         sys.exit(1)
     if not m.password and not m.access_token:
-        _console.print(f"[bold yellow]Matrix password or access_token is required.{hint}[/bold yellow]")
+        _console.print(
+            f"[bold yellow]Matrix password or access_token is required.{hint}[/bold yellow]"
+        )
         sys.exit(1)
     if not m.allowed_rooms and not m.allowed_users:
         _console.print(

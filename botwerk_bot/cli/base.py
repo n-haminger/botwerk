@@ -297,9 +297,7 @@ def wrap_command(
     """
     if config.docker_container:
         if config.linux_user:
-            logger.warning(
-                "Both docker_container and linux_user set; docker takes precedence"
-            )
+            logger.warning("Both docker_container and linux_user set; docker takes precedence")
         return docker_wrap(cmd, config, extra_env=extra_env, interactive=interactive)
     if config.linux_user:
         return sudo_wrap(cmd, config, extra_env=extra_env)
