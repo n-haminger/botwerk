@@ -37,7 +37,8 @@ maintained independently at [n-haminger/botwerk](https://github.com/n-haminger/b
 
 ### Phase 6: Branding
 - [ ] Create botwerk logo / bot avatar
-- [ ] Update README with botwerk-specific description and screenshots
+- [x] Update README: remove ductor images, PyPI badges, add fork description, GitHub install
+- [x] Delete obsolete ductor-branded images (logo_text.png, welcome.png, screenshots)
 - [ ] Update bot welcome screens and onboarding text
 
 ## Planned
