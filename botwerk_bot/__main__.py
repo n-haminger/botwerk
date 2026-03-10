@@ -328,6 +328,12 @@ def main() -> None:
     commands = [a for a in args if not a.startswith("-")]
     verbose = "--verbose" in args or "-v" in args
 
+    if "--version" in args or "-V" in args:
+        from botwerk_bot.infra.version import get_current_version
+
+        _console.print(f"botwerk {get_current_version()}")
+        return
+
     if "--help" in args or "-h" in args:
         commands.append("help")
 
