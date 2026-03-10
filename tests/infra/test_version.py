@@ -90,9 +90,7 @@ class TestCheckGithubReleases:
     """Test GitHub Releases API response handling."""
 
     async def test_returns_version_info_when_update_available(self) -> None:
-        mock = _mock_github_session(
-            json_data={"tag_name": "v2.0.0", "name": "Release 2.0.0"}
-        )
+        mock = _mock_github_session(json_data={"tag_name": "v2.0.0", "name": "Release 2.0.0"})
 
         with (
             patch("botwerk_bot.infra.version.get_current_version", return_value="1.0.0"),

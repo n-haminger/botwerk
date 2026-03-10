@@ -27,7 +27,9 @@ from botwerk_bot.cli.stream_events import (
 
 
 def _make_cli(monkeypatch: pytest.MonkeyPatch, **overrides: Any) -> GeminiCLI:
-    monkeypatch.setattr("botwerk_bot.cli.gemini_provider.find_gemini_cli", lambda: "/usr/bin/gemini")
+    monkeypatch.setattr(
+        "botwerk_bot.cli.gemini_provider.find_gemini_cli", lambda: "/usr/bin/gemini"
+    )
     monkeypatch.setattr("botwerk_bot.cli.gemini_provider.find_gemini_cli_js", lambda: None)
     return GeminiCLI(
         CLIConfig(

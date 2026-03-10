@@ -11,7 +11,6 @@ import pytest
 
 from botwerk_bot.matrix.credentials import _save_credentials, login_or_restore
 
-
 # ---------------------------------------------------------------------------
 # _save_credentials
 # ---------------------------------------------------------------------------

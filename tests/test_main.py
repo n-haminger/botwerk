@@ -32,7 +32,9 @@ class TestLoadConfig:
         (fw / "config.example.json").write_text(json.dumps(example))
 
         with patch("botwerk_bot.__main__.resolve_paths") as mock_paths:
-            paths = BotwerkPaths(botwerk_home=home, home_defaults=fw / "workspace", framework_root=fw)
+            paths = BotwerkPaths(
+                botwerk_home=home, home_defaults=fw / "workspace", framework_root=fw
+            )
             mock_paths.return_value = paths
             with patch("botwerk_bot.__main__.init_workspace"):
                 config = load_config()
@@ -52,7 +54,9 @@ class TestLoadConfig:
         (config_dir / "config.json").write_text(json.dumps(user_cfg))
 
         with patch("botwerk_bot.__main__.resolve_paths") as mock_paths:
-            paths = BotwerkPaths(botwerk_home=home, home_defaults=fw / "workspace", framework_root=fw)
+            paths = BotwerkPaths(
+                botwerk_home=home, home_defaults=fw / "workspace", framework_root=fw
+            )
             mock_paths.return_value = paths
             with patch("botwerk_bot.__main__.init_workspace"):
                 config = load_config()
@@ -72,7 +76,9 @@ class TestLoadConfig:
         (config_dir / "config.json").write_text(json.dumps(old_cfg))
 
         with patch("botwerk_bot.__main__.resolve_paths") as mock_paths:
-            paths = BotwerkPaths(botwerk_home=home, home_defaults=fw / "workspace", framework_root=fw)
+            paths = BotwerkPaths(
+                botwerk_home=home, home_defaults=fw / "workspace", framework_root=fw
+            )
             mock_paths.return_value = paths
             with patch("botwerk_bot.__main__.init_workspace"):
                 config = load_config()
@@ -90,7 +96,9 @@ class TestLoadConfig:
         fw.mkdir()
 
         with patch("botwerk_bot.__main__.resolve_paths") as mock_paths:
-            paths = BotwerkPaths(botwerk_home=home, home_defaults=fw / "workspace", framework_root=fw)
+            paths = BotwerkPaths(
+                botwerk_home=home, home_defaults=fw / "workspace", framework_root=fw
+            )
             mock_paths.return_value = paths
             with patch("botwerk_bot.__main__.init_workspace"):
                 config = load_config()
@@ -112,7 +120,9 @@ class TestLoadConfig:
         (config_dir / "config.json").write_text(json.dumps(user_cfg), encoding="utf-8")
 
         with patch("botwerk_bot.__main__.resolve_paths") as mock_paths:
-            paths = BotwerkPaths(botwerk_home=home, home_defaults=fw / "workspace", framework_root=fw)
+            paths = BotwerkPaths(
+                botwerk_home=home, home_defaults=fw / "workspace", framework_root=fw
+            )
             mock_paths.return_value = paths
             with patch("botwerk_bot.__main__.init_workspace"):
                 config = load_config()

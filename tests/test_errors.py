@@ -1,8 +1,8 @@
 """Tests for the exception hierarchy."""
 
 from botwerk_bot.errors import (
-    CLIError,
     BotwerkError,
+    CLIError,
     PathValidationError,
     SecurityError,
     WorkspaceError,

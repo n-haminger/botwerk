@@ -6,10 +6,7 @@ from collections import deque
 from dataclasses import dataclass, field
 from typing import Any
 
-import pytest
-
 from botwerk_bot.matrix.bot import MatrixBot
-
 
 # ---------------------------------------------------------------------------
 # Lightweight fakes — no real nio dependency needed
@@ -54,9 +51,12 @@ class TestIsDmRoom:
 
     def test_aliased_room_is_group(self) -> None:
         """Rooms with a canonical alias are always groups."""
-        assert MatrixBot._is_dm_room(
-            FakeRoom(member_count=1, name=None, canonical_alias="#room:server")
-        ) is False
+        assert (
+            MatrixBot._is_dm_room(
+                FakeRoom(member_count=1, name=None, canonical_alias="#room:server")
+            )
+            is False
+        )
 
     def test_group_three_members(self) -> None:
         assert MatrixBot._is_dm_room(FakeRoom(member_count=3, name=None)) is False
@@ -105,10 +105,13 @@ class TestIsMessageAddressed:
         assert self._check("random chat message") is False
 
     def test_mention_in_formatted_body(self) -> None:
-        assert self._check(
-            "hey Bot",
-            formatted_body='hey <a href="https://matrix.to/#/@bot:server">Bot</a>',
-        ) is True
+        assert (
+            self._check(
+                "hey Bot",
+                formatted_body='hey <a href="https://matrix.to/#/@bot:server">Bot</a>',
+            )
+            is True
+        )
 
     def test_reply_to_bot_message(self) -> None:
         source = {

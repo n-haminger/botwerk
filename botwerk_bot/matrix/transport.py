@@ -126,7 +126,8 @@ class MatrixTransport:
         notice = env.metadata.get("provider_switch_notice", "")
         if notice:
             await matrix_send_rich(
-                self._bot.client, room_id,
+                self._bot.client,
+                room_id,
                 f"**Provider Switch Detected**\n\n{notice}",
             )
         if env.result_text:

@@ -199,7 +199,10 @@ class TestUpdateObserver:
         observer = UpdateObserver(notify=notify)
 
         with (
-            patch("botwerk_bot.infra.updater.check_github_releases", side_effect=RuntimeError("network")),
+            patch(
+                "botwerk_bot.infra.updater.check_github_releases",
+                side_effect=RuntimeError("network"),
+            ),
             patch("botwerk_bot.infra.updater._INITIAL_DELAY_S", 0),
             patch("botwerk_bot.infra.updater._CHECK_INTERVAL_S", 0.01),
         ):

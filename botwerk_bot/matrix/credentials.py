@@ -51,9 +51,7 @@ async def login_or_restore(
             device_id=config.device_id,
             access_token=config.access_token,
         )
-        _save_credentials(
-            creds_file, config.user_id, config.device_id, config.access_token
-        )
+        _save_credentials(creds_file, config.user_id, config.device_id, config.access_token)
         logger.info("Restored Matrix login from config token")
         return
 
@@ -64,9 +62,7 @@ async def login_or_restore(
 
     resp = await client.login(config.password, device_name="botwerk")
     if hasattr(resp, "access_token"):
-        _save_credentials(
-            creds_file, resp.user_id, resp.device_id, resp.access_token
-        )
+        _save_credentials(creds_file, resp.user_id, resp.device_id, resp.access_token)
         logger.info("Matrix login successful, credentials saved")
     else:
         msg = f"Matrix login failed: {resp}"

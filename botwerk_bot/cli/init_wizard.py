@@ -308,7 +308,9 @@ def _ask_matrix_user_id(console: Console) -> str:
         uid = uid.strip()
         if _MATRIX_USER_RE.match(uid):
             return uid
-        console.print("[red]Invalid format. Expected: @localpart:domain (e.g. @mybot:matrix.org)[/red]")
+        console.print(
+            "[red]Invalid format. Expected: @localpart:domain (e.g. @mybot:matrix.org)[/red]"
+        )
 
 
 def _ask_matrix_password(console: Console) -> str:

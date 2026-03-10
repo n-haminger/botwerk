@@ -81,7 +81,8 @@ async def test_orchestrator_passes_cache_to_observers(
 
     with (
         patch(
-            "botwerk_bot.orchestrator.observers.CodexCacheObserver", return_value=mock_cache_observer
+            "botwerk_bot.orchestrator.observers.CodexCacheObserver",
+            return_value=mock_cache_observer,
         ),
         patch("botwerk_bot.orchestrator.observers.CronObserver", mock_cron_class),
         patch("botwerk_bot.orchestrator.observers.WebhookObserver", mock_webhook_class),

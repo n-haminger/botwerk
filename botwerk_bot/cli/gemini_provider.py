@@ -20,7 +20,11 @@ from botwerk_bot.cli.base import (
     docker_wrap,
     wrap_command,
 )
-from botwerk_bot.cli.gemini_events import extract_result_text, extract_text, parse_gemini_stream_line
+from botwerk_bot.cli.gemini_events import (
+    extract_result_text,
+    extract_text,
+    parse_gemini_stream_line,
+)
 from botwerk_bot.cli.gemini_utils import (
     create_system_prompt_file,
     find_gemini_cli,

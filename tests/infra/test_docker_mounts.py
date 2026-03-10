@@ -133,7 +133,9 @@ def docker_paths(tmp_path: Path) -> BotwerkPaths:
 class TestDockerManagerMounts:
     """Integration tests: verify mounts appear in the docker run command."""
 
-    async def test_single_mount_in_run_cmd(self, tmp_path: Path, docker_paths: BotwerkPaths) -> None:
+    async def test_single_mount_in_run_cmd(
+        self, tmp_path: Path, docker_paths: BotwerkPaths
+    ) -> None:
         proj = tmp_path / "myapp"
         proj.mkdir()
 

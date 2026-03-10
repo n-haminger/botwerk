@@ -238,7 +238,9 @@ def test_cleanup_removes_agents_md_when_only_claude(mock_paths: BotwerkPaths) ->
     # Pre-create old AGENTS.md files (simulating previous Codex installation)
     old_agents1 = mock_paths.botwerk_home / "config" / "AGENTS.md"
     # cron_tasks files are user-owned — they must survive cleanup
-    cron_task_agents = mock_paths.botwerk_home / "workspace" / "cron_tasks" / "my-task" / "AGENTS.md"
+    cron_task_agents = (
+        mock_paths.botwerk_home / "workspace" / "cron_tasks" / "my-task" / "AGENTS.md"
+    )
     old_agents1.parent.mkdir(parents=True, exist_ok=True)
     cron_task_agents.parent.mkdir(parents=True, exist_ok=True)
     old_agents1.write_text("# Old Agents File")
@@ -268,7 +270,9 @@ def test_cleanup_removes_claude_md_when_only_codex(mock_paths: BotwerkPaths) -> 
     Files inside workspace/cron_tasks/ are user-owned and must NOT be deleted.
     """
     old_claude1 = mock_paths.botwerk_home / "config" / "CLAUDE.md"
-    cron_task_claude = mock_paths.botwerk_home / "workspace" / "cron_tasks" / "my-task" / "CLAUDE.md"
+    cron_task_claude = (
+        mock_paths.botwerk_home / "workspace" / "cron_tasks" / "my-task" / "CLAUDE.md"
+    )
     old_claude1.parent.mkdir(parents=True, exist_ok=True)
     cron_task_claude.parent.mkdir(parents=True, exist_ok=True)
     old_claude1.write_text("# Old Claude File")

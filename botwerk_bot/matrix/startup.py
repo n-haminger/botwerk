@@ -6,9 +6,7 @@ parts (bot username lookup, command registration, group audit).
 
 from __future__ import annotations
 
-import asyncio
 import logging
-from pathlib import Path
 from typing import TYPE_CHECKING
 
 from botwerk_bot.infra.restart import consume_restart_marker
@@ -33,19 +31,17 @@ async def run_matrix_startup(bot: MatrixBot) -> None:
 
     # Notify restart
     if restart_reason:
-        await bot.notification_service.notify_all(
-            f"**Bot restarted** ({restart_reason})"
-        )
+        await bot.notification_service.notify_all(f"**Bot restarted** ({restart_reason})")
 
     # Update checker
     try:
         from botwerk_bot.infra.updater import UpdateObserver, is_upgradeable
 
         if is_upgradeable() and bot._config.update_check:
+
             async def _on_update(version: str) -> None:
                 await bot.notification_service.notify_all(
-                    f"**Update available:** `{version}`\n"
-                    "Use `/upgrade` to update."
+                    f"**Update available:** `{version}`\nUse `/upgrade` to update."
                 )
 
             bot._update_observer = UpdateObserver(notify=_on_update)

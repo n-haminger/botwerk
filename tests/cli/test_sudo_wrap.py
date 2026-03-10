@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from botwerk_bot.cli.base import CLIConfig, docker_wrap, sudo_wrap, wrap_command
+from botwerk_bot.cli.base import CLIConfig, sudo_wrap, wrap_command
 
 
 class TestSudoWrap:

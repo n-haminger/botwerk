@@ -40,7 +40,9 @@ def _telegram_identity_check(new: AgentConfig, old: AgentConfig) -> bool:
 
 
 def _matrix_identity_check(new: AgentConfig, old: AgentConfig) -> bool:
-    return new.matrix.homeserver != old.matrix.homeserver or new.matrix.user_id != old.matrix.user_id
+    return (
+        new.matrix.homeserver != old.matrix.homeserver or new.matrix.user_id != old.matrix.user_id
+    )
 
 
 def _default_identity_check(new: AgentConfig, old: AgentConfig) -> bool:
@@ -513,7 +515,11 @@ class AgentSupervisor:
 
         botwerk_user = getpass.getuser()
         proc = await asyncio.create_subprocess_exec(
-            "sudo", self._PROVISIONING_SCRIPT, "create", agent_name, botwerk_user,
+            "sudo",
+            self._PROVISIONING_SCRIPT,
+            "create",
+            agent_name,
+            botwerk_user,
             stdout=asyncio.subprocess.PIPE,
             stderr=asyncio.subprocess.PIPE,
         )
@@ -537,7 +543,11 @@ class AgentSupervisor:
 
         botwerk_user = getpass.getuser()
         proc = await asyncio.create_subprocess_exec(
-            "sudo", self._PROVISIONING_SCRIPT, "fix-perms", agent_name, botwerk_user,
+            "sudo",
+            self._PROVISIONING_SCRIPT,
+            "fix-perms",
+            agent_name,
+            botwerk_user,
             stdout=asyncio.subprocess.PIPE,
             stderr=asyncio.subprocess.PIPE,
         )
