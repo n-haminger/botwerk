@@ -1,4 +1,4 @@
-"""Tests for PyPI version checking."""
+"""Tests for GitHub Releases version checking."""
 
 from __future__ import annotations
 
@@ -10,7 +10,7 @@ from unittest.mock import AsyncMock, MagicMock, patch
 from botwerk_bot.infra.version import (
     VersionInfo,
     _parse_version,
-    check_pypi,
+    check_github_releases,
     fetch_changelog,
     get_current_version,
 )
@@ -62,13 +62,10 @@ class TestGetCurrentVersion:
             assert get_current_version() == "0.0.0"
 
 
-def _mock_pypi_session(
+def _mock_github_session(
     *, status: int = 200, json_data: dict | None = None, error: Exception | None = None
 ) -> MagicMock:
-    """Build a mock aiohttp.ClientSession for check_pypi tests.
-
-    Handles the combined ``async with (ClientSession() as s, s.get() as r)`` pattern.
-    """
+    """Build a mock aiohttp.ClientSession for GitHub API tests."""
     resp = MagicMock()
     resp.status = status
     resp.json = AsyncMock(return_value=json_data or {})
@@ -89,104 +86,75 @@ def _mock_pypi_session(
     return mock_session_cm
 
 
-class TestCheckPypi:
-    """Test PyPI API response handling."""
+class TestCheckGithubReleases:
+    """Test GitHub Releases API response handling."""
 
     async def test_returns_version_info_when_update_available(self) -> None:
-        mock = _mock_pypi_session(
-            json_data={"info": {"version": "2.0.0", "summary": "A great update"}}
+        mock = _mock_github_session(
+            json_data={"tag_name": "v2.0.0", "name": "Release 2.0.0"}
         )
 
         with (
             patch("botwerk_bot.infra.version.get_current_version", return_value="1.0.0"),
             patch("botwerk_bot.infra.version.aiohttp.ClientSession", mock),
         ):
-            result = await check_pypi()
+            result = await check_github_releases()
 
         assert result is not None
         assert result.current == "1.0.0"
         assert result.latest == "2.0.0"
         assert result.update_available is True
-        assert result.summary == "A great update"
+        assert result.summary == "Release 2.0.0"
 
     async def test_no_update_when_same_version(self) -> None:
-        mock = _mock_pypi_session(json_data={"info": {"version": "1.0.0", "summary": "Current"}})
+        mock = _mock_github_session(json_data={"tag_name": "v1.0.0", "name": "Current"})
 
         with (
             patch("botwerk_bot.infra.version.get_current_version", return_value="1.0.0"),
             patch("botwerk_bot.infra.version.aiohttp.ClientSession", mock),
         ):
-            result = await check_pypi()
+            result = await check_github_releases()
 
         assert result is not None
         assert result.update_available is False
 
     async def test_returns_none_on_http_error(self) -> None:
-        mock = _mock_pypi_session(status=500)
+        mock = _mock_github_session(status=500)
 
         with patch("botwerk_bot.infra.version.aiohttp.ClientSession", mock):
-            result = await check_pypi()
+            result = await check_github_releases()
 
         assert result is None
 
     async def test_returns_none_on_network_error(self) -> None:
         import aiohttp
 
-        mock = _mock_pypi_session(error=aiohttp.ClientError())
+        mock = _mock_github_session(error=aiohttp.ClientError())
 
         with patch("botwerk_bot.infra.version.aiohttp.ClientSession", mock):
-            result = await check_pypi()
+            result = await check_github_releases()
 
         assert result is None
 
-    async def test_returns_none_on_missing_version_field(self) -> None:
-        mock = _mock_pypi_session(json_data={"info": {}})
+    async def test_returns_none_on_missing_tag(self) -> None:
+        mock = _mock_github_session(json_data={})
 
         with patch("botwerk_bot.infra.version.aiohttp.ClientSession", mock):
-            result = await check_pypi()
+            result = await check_github_releases()
 
         assert result is None
 
-    async def test_returns_none_on_empty_info(self) -> None:
-        mock = _mock_pypi_session(json_data={})
-
-        with patch("botwerk_bot.infra.version.aiohttp.ClientSession", mock):
-            result = await check_pypi()
-
-        assert result is None
-
-    async def test_fresh_mode_sets_cache_bust_headers(self) -> None:
-        call_kwargs: dict[str, object] = {}
-        resp = MagicMock()
-        resp.status = 200
-        resp.json = AsyncMock(return_value={"info": {"version": "2.0.0", "summary": "Fresh"}})
-
-        @asynccontextmanager
-        async def mock_get(*_args: object, **kwargs: object) -> AsyncGenerator[MagicMock, None]:
-            call_kwargs.update(kwargs)
-            yield resp
-
-        session = MagicMock()
-        session.get = mock_get
-
-        @asynccontextmanager
-        async def mock_session_cm(**_kwargs: object) -> AsyncGenerator[MagicMock, None]:
-            yield session
+    async def test_strips_v_prefix_from_tag(self) -> None:
+        mock = _mock_github_session(json_data={"tag_name": "v3.1.0", "name": ""})
 
         with (
             patch("botwerk_bot.infra.version.get_current_version", return_value="1.0.0"),
-            patch("botwerk_bot.infra.version.aiohttp.ClientSession", mock_session_cm),
+            patch("botwerk_bot.infra.version.aiohttp.ClientSession", mock),
         ):
-            result = await check_pypi(fresh=True)
+            result = await check_github_releases()
 
         assert result is not None
-        headers = call_kwargs.get("headers")
-        params = call_kwargs.get("params")
-        assert isinstance(headers, dict)
-        assert isinstance(params, dict)
-        assert headers.get("Cache-Control") == "no-cache"
-        assert headers.get("Pragma") == "no-cache"
-        assert "_" in params
+        assert result.latest == "3.1.0"
 
     def test_version_info_is_frozen(self) -> None:
         info = VersionInfo(current="1.0.0", latest="2.0.0", update_available=True, summary="test")
@@ -198,14 +166,14 @@ class TestFetchChangelog:
     """Test GitHub Releases changelog fetching."""
 
     async def test_returns_body_for_v_prefixed_tag(self) -> None:
-        mock = _mock_pypi_session(json_data={"body": "## What's new\n\n- Feature A"})
+        mock = _mock_github_session(json_data={"body": "## What's new\n\n- Feature A"})
         with patch("botwerk_bot.infra.version.aiohttp.ClientSession", mock):
             result = await fetch_changelog("1.0.0")
         assert result is not None
         assert "Feature A" in result
 
     async def test_returns_none_on_404(self) -> None:
-        mock = _mock_pypi_session(status=404)
+        mock = _mock_github_session(status=404)
         with patch("botwerk_bot.infra.version.aiohttp.ClientSession", mock):
             result = await fetch_changelog("99.0.0")
         assert result is None
@@ -213,19 +181,19 @@ class TestFetchChangelog:
     async def test_returns_none_on_network_error(self) -> None:
         import aiohttp
 
-        mock = _mock_pypi_session(error=aiohttp.ClientError())
+        mock = _mock_github_session(error=aiohttp.ClientError())
         with patch("botwerk_bot.infra.version.aiohttp.ClientSession", mock):
             result = await fetch_changelog("1.0.0")
         assert result is None
 
     async def test_returns_none_on_empty_body(self) -> None:
-        mock = _mock_pypi_session(json_data={"body": ""})
+        mock = _mock_github_session(json_data={"body": ""})
         with patch("botwerk_bot.infra.version.aiohttp.ClientSession", mock):
             result = await fetch_changelog("1.0.0")
         assert result is None
 
     async def test_strips_whitespace(self) -> None:
-        mock = _mock_pypi_session(json_data={"body": "  changelog text  \n\n"})
+        mock = _mock_github_session(json_data={"body": "  changelog text  \n\n"})
         with patch("botwerk_bot.infra.version.aiohttp.ClientSession", mock):
             result = await fetch_changelog("1.0.0")
         assert result == "changelog text"

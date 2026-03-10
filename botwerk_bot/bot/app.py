@@ -653,7 +653,7 @@ class TelegramBot:
                         url="https://github.com/n-haminger/botwerk/releases",
                     ),
                 ],
-                [InlineKeyboardButton(text="PyPI", url="https://pypi.org/project/botwerk/")],
+                [InlineKeyboardButton(text="GitHub", url="https://github.com/n-haminger/botwerk")],
             ],
         )
         await send_rich(

@@ -8,7 +8,7 @@ from pathlib import Path
 from typing import TYPE_CHECKING
 
 from botwerk_bot.cli.auth import check_all_auth
-from botwerk_bot.infra.version import check_pypi, get_current_version
+from botwerk_bot.infra.version import check_github_releases, get_current_version
 from botwerk_bot.orchestrator.registry import OrchestratorResult
 from botwerk_bot.orchestrator.selectors.cron_selector import cron_selector_start
 from botwerk_bot.orchestrator.selectors.model_selector import model_selector_start, switch_model
@@ -121,11 +121,11 @@ async def cmd_upgrade(_orch: Orchestrator, _key: SessionKey, _text: str) -> Orch
             ),
         )
 
-    info = await check_pypi(fresh=True)
+    info = await check_github_releases()
 
     if info is None:
         return OrchestratorResult(
-            text="Could not reach PyPI to check for updates. Try again later.",
+            text="Could not reach GitHub to check for updates. Try again later.",
         )
 
     if not info.update_available:
