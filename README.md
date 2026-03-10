@@ -1,16 +1,12 @@
-<p align="center">
-  <img src="https://raw.githubusercontent.com/n-haminger/botwerk/main/botwerk_bot/bot/botwerk_images/logo_text.png" alt="botwerk" width="100%" />
-</p>
+# botwerk
+
+**Claude Code, Codex CLI, and Gemini CLI as your coding assistant — via Telegram or Matrix.**
+Uses only official CLIs. Nothing spoofed, nothing proxied.
 
 <p align="center">
-  <strong>Claude Code, Codex CLI, and Gemini CLI as your coding assistant — via Telegram or Matrix.</strong><br>
-  Uses only official CLIs. Nothing spoofed, nothing proxied.
-</p>
-
-<p align="center">
-  <a href="https://pypi.org/project/botwerk/"><img src="https://img.shields.io/pypi/v/botwerk?color=blue" alt="PyPI" /></a>
-  <a href="https://pypi.org/project/botwerk/"><img src="https://img.shields.io/pypi/pyversions/botwerk?v=1" alt="Python" /></a>
   <a href="https://github.com/n-haminger/botwerk/blob/main/LICENSE"><img src="https://img.shields.io/github/license/n-haminger/botwerk" alt="License" /></a>
+  <a href="https://github.com/n-haminger/botwerk/releases"><img src="https://img.shields.io/github/v/release/n-haminger/botwerk?include_prereleases&label=release" alt="Release" /></a>
+  <img src="https://img.shields.io/badge/python-3.11%2B-blue" alt="Python 3.11+" />
 </p>
 
 <p align="center">
@@ -25,17 +21,14 @@
 
 If you want to control Claude Code, Google's Gemini CLI, or OpenAI's Codex CLI via Telegram or Matrix, build automations, or manage multiple agents easily — botwerk is the right tool for you.
 
-botwerk runs on your machine and sends simple console commands as if you were typing them yourself, so you can use your active subscriptions (Claude Max, etc.) directly. No API proxying, no SDK patching, no spoofed headers. Just the official CLIs, executed as subprocesses, with all state kept in plain JSON and Markdown under `~/.botwerk/`.
+botwerk is a fork of [ductor](https://github.com/PleasePrompto/ductor), maintained independently with additional features like Matrix/Element transport, multi-agent coordination, and Linux user isolation.
 
-<p align="center">
-  <img src="https://raw.githubusercontent.com/n-haminger/botwerk/main/docs/images/botwerk-start.jpeg" alt="botwerk /start screen" width="49%" />
-  <img src="https://raw.githubusercontent.com/n-haminger/botwerk/main/docs/images/botwerk-quick-actions.jpeg" alt="botwerk quick action buttons" width="49%" />
-</p>
+It runs on your machine and sends simple console commands as if you were typing them yourself, so you can use your active subscriptions (Claude Max, etc.) directly. No API proxying, no SDK patching, no spoofed headers. Just the official CLIs, executed as subprocesses, with all state kept in plain JSON and Markdown under `~/.botwerk/`.
 
 ## Quick start
 
 ```bash
-pipx install botwerk
+pip install git+https://github.com/n-haminger/botwerk.git
 botwerk
 ```
 
