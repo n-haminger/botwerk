@@ -79,12 +79,14 @@ Changes take effect on the next CLI invocation (mtime-based cache invalidation, 
 | `permission_mode` | `str` | `"bypassPermissions"` | Provider sandbox/approval mode |
 | `cli_timeout` | `float` | `600.0` | Legacy/global timeout. Still used by cron/webhook `cron_task`, inter-agent turns, stale-process heartbeat cleanup, and as fallback for unknown timeout paths |
 | `reasoning_effort` | `str` | `"medium"` | Default Codex reasoning level |
-| `file_access` | `str` | `"all"` | File access scope (`all`, `home`, `workspace`) for Telegram sends and API `GET /files`; unknown values fall back to workspace-only |
+| `file_access` | `str` | `"all"` | File access scope (`all`, `home`, `workspace`) for file sends and API `GET /files`; unknown values fall back to workspace-only |
 | `gemini_api_key` | `str \| None` | `None` | Config fallback key injected for Gemini API-key mode |
-| `telegram_token` | `str` | `""` | Telegram bot token |
+| `transport` | `str` | `"telegram"` | Messaging transport: `"telegram"` or `"matrix"` |
+| `telegram_token` | `str` | `""` | Telegram bot token (required when `transport=telegram`) |
 | `allowed_user_ids` | `list[int]` | `[]` | Telegram user allowlist (applies in both private and group chats) |
 | `allowed_group_ids` | `list[int]` | `[]` | Telegram group allowlist (which groups the bot can operate in; default `[]` = no groups, fail-closed). In groups, both the group and the user must be allowlisted |
 | `group_mention_only` | `bool` | `false` | In allowlisted group chats, only process messages that explicitly mention or reply to the bot (mention-gating filter; not an auth bypass) |
+| `matrix` | `MatrixConfig` | see below | Matrix homeserver connection (required when `transport=matrix`) |
 | `streaming` | `StreamingConfig` | see below | Streaming tuning |
 | `docker` | `DockerConfig` | see below | Docker sidecar config |
 | `heartbeat` | `HeartbeatConfig` | see below | Background heartbeat config |
@@ -94,6 +96,25 @@ Changes take effect on the next CLI invocation (mtime-based cache invalidation, 
 | `cli_parameters` | `CLIParametersConfig` | see below | Provider-specific extra CLI flags |
 | `timeouts` | `TimeoutConfig` | see below | Path-specific timeout policy (`normal`, `background`, `subagent`) |
 | `tasks` | `TasksConfig` | see below | Delegated background task system (`TaskHub`) |
+
+## `MatrixConfig`
+
+| Field | Type | Default | Notes |
+|---|---|---|---|
+| `homeserver` | `str` | `""` | Matrix homeserver URL (e.g. `https://matrix.org`) |
+| `user_id` | `str` | `""` | Bot user ID (e.g. `@ductor:matrix.org`) |
+| `password` | `str` | `""` | Password for initial login |
+| `access_token` | `str` | `""` | Persisted after first login (auto-managed) |
+| `device_id` | `str` | `""` | Persisted after first login (auto-managed) |
+| `allowed_rooms` | `list[str]` | `[]` | Room IDs or aliases the bot may operate in |
+| `allowed_users` | `list[str]` | `[]` | Matrix user IDs allowed to interact |
+| `store_path` | `str` | `"matrix_store"` | E2EE key store directory, relative to `ductor_home` |
+
+Notes:
+
+- `access_token` and `device_id` are auto-populated after first successful login and persisted back to `config.json`.
+- The bot supports end-to-end encrypted rooms via `matrix-nio[e2e]`.
+- `allowed_rooms` and `allowed_users` together form the Matrix auth model.
 
 ## `CLIParametersConfig`
 
@@ -277,7 +298,7 @@ When extras are configured, the supervisor startup timeout is dynamically extend
 | Field | Type | Default | Notes |
 |---|---|---|---|
 | `enabled` | `bool` | `true` | Master toggle |
-| `telegram_files_days` | `int` | `30` | Retention in `workspace/telegram_files/` |
+| `media_files_days` | `int` | `30` | Retention for media files (telegram + matrix) |
 | `output_to_user_days` | `int` | `30` | Retention in `workspace/output_to_user/` |
 | `api_files_days` | `int` | `30` | Retention in `workspace/api_files/` |
 | `check_hour` | `int` | `3` | Local hour in `user_timezone` for cleanup run |
@@ -341,7 +362,7 @@ Observer lifecycle caveat:
 
 Restart-required top-level fields:
 
-- `telegram_token`
+- `transport`, `telegram_token`, `matrix`
 - `docker`, `api`, `webhooks`
 - `ductor_home`, `log_level`, `gemini_api_key`, `timeouts`, `tasks`
 
@@ -425,7 +446,9 @@ Managed via:
 | Field | Type | Required | Default | Notes |
 |---|---|---|---|---|
 | `name` | `str` | yes | | Unique lowercase identifier |
-| `telegram_token` | `str` | yes | | Separate bot token from @BotFather |
+| `transport` | `str` | no | inherited | `"telegram"` or `"matrix"` |
+| `telegram_token` | `str` | conditional | | Required when `transport=telegram` |
+| `matrix` | `MatrixConfig` | conditional | | Required when `transport=matrix` |
 | `allowed_user_ids` | `list[int]` | no | `[]` | Telegram user allowlist |
 | `allowed_group_ids` | `list[int]` | no | `[]` | Telegram group allowlist |
 | `provider` | `str` | no | inherited | Default provider |
@@ -450,6 +473,7 @@ Managed via:
 | `api` | `ApiConfig` | no | disabled | Disabled by default for sub-agents |
 | `cli_parameters` | `CLIParametersConfig` | no | inherited | |
 | `user_timezone` | `str` | no | inherited | |
+| `linux_user` | `bool` | no | `false` | Run CLI as dedicated Linux user (`ductor-<name>`) |
 
 "inherited" means the value comes from the main agent's `config.json` when omitted.
 
@@ -473,8 +497,14 @@ Example:
   },
   {
     "name": "coder",
-    "telegram_token": "654321:XYZ...",
-    "allowed_user_ids": [12345678],
+    "transport": "matrix",
+    "matrix": {
+      "homeserver": "https://matrix.example.com",
+      "user_id": "@coder:example.com",
+      "password": "...",
+      "allowed_rooms": ["!room:example.com"],
+      "allowed_users": ["@user:example.com"]
+    },
     "provider": "codex",
     "reasoning_effort": "high"
   }
@@ -491,7 +521,7 @@ Example:
 Then it always forces:
 
 - `ductor_home = ~/.ductor/agents/<name>/`
-- `telegram_token`, `allowed_user_ids`, and `allowed_group_ids` from the sub-agent entry
+- `transport`, `telegram_token`, `matrix`, `allowed_user_ids`, and `allowed_group_ids` from the sub-agent entry
 - `api.enabled = false` when no explicit `api` block is provided
 
 Notes:
@@ -509,3 +539,44 @@ Notes:
 - other field changes currently do not auto-restart running agents
 
 For non-token field updates on a running agent, use `/agent_restart <name>` (or restart the bot) to apply them immediately.
+
+### Linux user isolation
+
+When `"linux_user": true` is set in a sub-agent's `agents.json` entry, CLI subprocesses (claude/codex/gemini) run as a dedicated Linux user `ductor-<name>` via `sudo -u`. This provides file-level access isolation between agents.
+
+**How it works:**
+
+1. On agent startup, `AgentSupervisor` calls the provisioning script (`scripts/manage-agent-user.sh`) via sudo to create the Linux user.
+2. The user is a system account (`--system --shell /usr/sbin/nologin`) in the `ductor` group.
+3. Claude Code credentials are symlinked from the main user's `~/.claude/` (directory traversal permissions are set automatically).
+4. The agent's workspace remains owned by the ductor service user; the agent user gets ACL-based `rwX` access via `fix-perms`.
+5. Claude CLI is made globally accessible via symlink (`/usr/local/bin/claude` → user-local install) with default ACLs on the versions directory so auto-updates work without restarts.
+6. CLI commands are wrapped with `sudo -Hnu ductor-<name> --preserve-env=... --` (HOME is set to the agent user's home so Claude finds its credentials).
+
+**Setup prerequisites:**
+
+One-time root setup — this is the only manual step per installation:
+
+```
+# /etc/sudoers.d/ductor-agents
+<service_user> ALL=(root) NOPASSWD: /opt/ductor/scripts/manage-agent-user.sh
+```
+
+The provisioning script handles everything else automatically:
+- Creates the Linux user and `ductor` group
+- Symlinks Claude credentials and sets directory traversal permissions
+- Installs Claude CLI globally (symlink + default ACLs for auto-updates)
+- Writes per-agent sudoers entries for CLI execution
+
+**Example agents.json:**
+
+```json
+{
+  "name": "codex",
+  "transport": "matrix",
+  "linux_user": true,
+  "matrix": { "..." : "..." }
+}
+```
+
+Docker and `linux_user` are mutually exclusive. Docker takes precedence if both are set.

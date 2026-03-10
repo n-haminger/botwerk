@@ -8,9 +8,10 @@
    - Claude Code CLI: `npm install -g @anthropic-ai/claude-code && claude auth`
    - Codex CLI: `npm install -g @openai/codex && codex auth`
    - Gemini CLI: `npm install -g @google/gemini-cli` and authenticate in `gemini`
-4. Telegram bot token from [@BotFather](https://t.me/BotFather)
-5. Telegram user ID from [@userinfobot](https://t.me/userinfobot)
-6. Docker optional (recommended for sandboxing)
+4. One of these messaging transports:
+   - **Telegram**: Bot token from [@BotFather](https://t.me/BotFather) + user ID from [@userinfobot](https://t.me/userinfobot)
+   - **Matrix**: Account on any homeserver (e.g. matrix.org) — homeserver URL, user ID, and password
+5. Docker optional (recommended for sandboxing)
 
 ## Install
 
@@ -44,7 +45,8 @@ ductor
 On first run, onboarding does:
 
 - checks Claude/Codex/Gemini auth status,
-- asks for Telegram token + user ID,
+- asks which transport to use (Telegram or Matrix),
+- collects transport credentials,
 - asks timezone,
 - offers Docker sandboxing (with optional AI/ML package selection),
 - offers service install,
@@ -256,10 +258,10 @@ Security basics:
 
 ### Bot not responding
 
-1. check `telegram_token` + `allowed_user_ids`
+1. check transport credentials (`telegram_token` / `matrix` block) + allowlists
 2. run `ductor status`
 3. inspect `~/.ductor/logs/agent.log`
-4. run `/diagnose` in Telegram
+4. run `/diagnose` in chat
 
 ### CLI installed but not authenticated
 

@@ -144,6 +144,7 @@ class Orchestrator:
                 gemini_cli_parameters=tuple(config.cli_parameters.gemini),
                 agent_name=agent_name,
                 interagent_port=interagent_port,
+                linux_user=config.linux_user,
             ),
             models=self._providers.models,
             available_providers=frozenset(),
@@ -430,6 +431,15 @@ class Orchestrator:
         self._named_sessions.end_all(chat_id)
         return killed
 
+    def interrupt(self, chat_id: int) -> int:
+        """Send SIGINT to active CLI processes for *chat_id*.
+
+        Unlike :meth:`abort` this does not kill or unregister the processes.
+        It sends a soft interrupt so the CLI can cancel the current tool
+        execution (equivalent to pressing ESC in the terminal).
+        """
+        return self._process_registry.interrupt_all(chat_id)
+
     def resolve_runtime_target(self, requested_model: str | None = None) -> tuple[str, str]:
         """Resolve requested model to the effective ``(model, provider)`` pair."""
         return self._providers.resolve_runtime_target(requested_model)
@@ -637,6 +647,7 @@ class Orchestrator:
                     claude_cli_parameters=tuple(config.cli_parameters.claude),
                     codex_cli_parameters=tuple(config.cli_parameters.codex),
                     gemini_cli_parameters=tuple(config.cli_parameters.gemini),
+                    linux_user=self._cli_service._config.linux_user,
                 )
             )
 

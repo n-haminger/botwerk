@@ -102,10 +102,18 @@ class CleanupConfig(BaseModel):
     """Settings for automatic file cleanup of workspace directories."""
 
     enabled: bool = True
-    telegram_files_days: int = 30
+    media_files_days: int = 30
     output_to_user_days: int = 30
     api_files_days: int = 30
     check_hour: int = 3
+
+    def __init__(self, **data: object) -> None:
+        # Backwards compat: accept old name ``telegram_files_days``.
+        if "telegram_files_days" in data and "media_files_days" not in data:
+            data["media_files_days"] = data.pop("telegram_files_days")  # type: ignore[union-attr]
+        elif "telegram_files_days" in data:
+            data.pop("telegram_files_days")  # type: ignore[union-attr]
+        super().__init__(**data)
 
 
 class CLIParametersConfig(BaseModel):
@@ -114,6 +122,19 @@ class CLIParametersConfig(BaseModel):
     claude: list[str] = Field(default_factory=list)
     codex: list[str] = Field(default_factory=list)
     gemini: list[str] = Field(default_factory=list)
+
+
+class MatrixConfig(BaseModel):
+    """Matrix homeserver connection settings."""
+
+    homeserver: str = ""  # https://matrix.myserver.com
+    user_id: str = ""  # @ductor:myserver.com
+    password: str = ""  # for initial login
+    access_token: str = ""  # persisted after first login
+    device_id: str = ""  # persisted after first login
+    allowed_rooms: list[str] = Field(default_factory=list)  # ["!abc:server", "#room:server"]
+    allowed_users: list[str] = Field(default_factory=list)  # ["@user:server"]
+    store_path: str = "matrix_store"  # relative to ductor_home
 
 
 class TasksConfig(BaseModel):
@@ -226,7 +247,7 @@ class AgentConfig(BaseModel):
     max_turns: int | None = None
     max_session_messages: int | None = None
     permission_mode: str = "bypassPermissions"
-    cli_timeout: float = 600.0
+    cli_timeout: float = 1800.0
     reasoning_effort: str = "medium"
     file_access: str = "all"
     gemini_api_key: str | None = None
@@ -241,9 +262,13 @@ class AgentConfig(BaseModel):
     tasks: TasksConfig = Field(default_factory=TasksConfig)
     user_timezone: str = ""
     group_mention_only: bool = False
+    interagent_port: int = 8799
+    transport: str = "telegram"  # "telegram" | "matrix"
     telegram_token: str = ""
     allowed_user_ids: list[int] = Field(default_factory=list)
     allowed_group_ids: list[int] = Field(default_factory=list)
+    matrix: MatrixConfig = Field(default_factory=MatrixConfig)
+    linux_user: str = ""  # Linux user for CLI subprocess isolation (empty = disabled)
 
     @field_validator("gemini_api_key", mode="before")
     @classmethod
