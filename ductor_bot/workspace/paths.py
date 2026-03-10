@@ -88,8 +88,18 @@ class DuctorPaths:
         return self.workspace / "telegram_files"
 
     @property
+    def matrix_files_dir(self) -> Path:
+        return self.workspace / "matrix_files"
+
+    @property
     def api_files_dir(self) -> Path:
         return self.workspace / "api_files"
+
+    def media_files_dir(self, transport: str) -> Path:
+        """Return the media files directory for the given transport."""
+        if transport == "matrix":
+            return self.matrix_files_dir
+        return self.telegram_files_dir
 
     @property
     def memory_system_dir(self) -> Path:
@@ -138,6 +148,10 @@ class DuctorPaths:
     @property
     def mainmemory_path(self) -> Path:
         return self.memory_system_dir / "MAINMEMORY.md"
+
+    @property
+    def join_notification_path(self) -> Path:
+        return self.workspace / "JOIN_NOTIFICATION.md"
 
     # -- Framework paths (bundled with package or repo root) --
 

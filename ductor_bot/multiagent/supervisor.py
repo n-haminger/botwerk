@@ -17,7 +17,7 @@ from ductor_bot.multiagent.stack import AgentStack
 from ductor_bot.workspace.paths import resolve_paths
 
 if TYPE_CHECKING:
-    from ductor_bot.multiagent.bus import InterAgentBus, NotifyCallback
+    from ductor_bot.multiagent.bus import InterAgentBus
     from ductor_bot.multiagent.internal_api import InternalAgentAPI
     from ductor_bot.multiagent.shared_knowledge import SharedKnowledgeSync
     from ductor_bot.tasks.hub import TaskHub
@@ -26,6 +26,31 @@ logger = logging.getLogger(__name__)
 
 _MAX_RESTART_RETRIES = 5
 _RESTART_BACKOFF_BASE = 5  # seconds, doubles each retry
+
+
+def _config_changed(new: AgentConfig, old: AgentConfig) -> bool:
+    """Detect meaningful config changes that require agent restart."""
+    if new.transport != old.transport:
+        return True
+    return _TRANSPORT_IDENTITY_CHANGED.get(new.transport, _default_identity_check)(new, old)
+
+
+def _telegram_identity_check(new: AgentConfig, old: AgentConfig) -> bool:
+    return new.telegram_token != old.telegram_token
+
+
+def _matrix_identity_check(new: AgentConfig, old: AgentConfig) -> bool:
+    return new.matrix.homeserver != old.matrix.homeserver or new.matrix.user_id != old.matrix.user_id
+
+
+def _default_identity_check(new: AgentConfig, old: AgentConfig) -> bool:
+    return False
+
+
+_TRANSPORT_IDENTITY_CHANGED: dict[str, object] = {
+    "telegram": _telegram_identity_check,
+    "matrix": _matrix_identity_check,
+}
 
 
 class AgentSupervisor:
@@ -55,13 +80,6 @@ class AgentSupervisor:
         self._internal_api: InternalAgentAPI | None = None
         self._shared_knowledge: SharedKnowledgeSync | None = None
         self._task_hub: TaskHub | None = None
-        self._notify_sender: NotifyCallback | None = None
-
-    def set_notification_sender(self, callback: NotifyCallback) -> None:
-        """Set callback for sending Telegram notifications (called after bot wiring)."""
-        self._notify_sender = callback
-        if self._bus is not None:
-            self._bus.set_notification_sender(callback)
 
     @property
     def stacks(self) -> dict[str, AgentStack]:
@@ -84,10 +102,10 @@ class AgentSupervisor:
         from ductor_bot.multiagent.internal_api import InternalAgentAPI
 
         self._bus = InterAgentBus()
-        if self._notify_sender is not None:
-            self._bus.set_notification_sender(self._notify_sender)
         self._internal_api = InternalAgentAPI(
-            self._bus, docker_mode=self._main_config.docker.enabled
+            self._bus,
+            port=self._main_config.interagent_port,
+            docker_mode=self._main_config.docker.enabled,
         )
         self._internal_api.set_health_ref(self._health)
         started = await self._internal_api.start()
@@ -345,9 +363,9 @@ class AgentSupervisor:
 
             logger.debug("Supervisor reference injected into agent '%s'", stack.name)
 
-        # aiogram runs startup handlers in registration order;
+        # Startup handlers run in registration order;
         # TelegramBot registers _on_startup in __init__, so ours runs after.
-        stack.bot.dispatcher.startup.register(_post_startup)
+        stack.bot.register_startup_hook(_post_startup)
 
     def _wire_task_hub(self, stack: AgentStack) -> None:
         """Wire task hub handlers for an agent stack.
@@ -411,6 +429,10 @@ class AgentSupervisor:
         agent_home = self._main_paths.ductor_home / "agents" / name
         config = merge_sub_agent_config(self._main_config, sub_cfg, agent_home)
 
+        # Provision dedicated Linux user if isolation is enabled.
+        if config.linux_user:
+            await self._ensure_agent_user(name)
+
         try:
             stack = await AgentStack.create(name, config)
         except Exception:
@@ -427,6 +449,14 @@ class AgentSupervisor:
                 model=config.model,
                 reasoning_effort=config.reasoning_effort,
             )
+
+        # Grant the isolated agent user ACL-based access to the workspace.
+        # The ductor service user retains ownership so the supervisor can
+        # always manage configs; the agent user gets rwX via ACL.
+        # This runs AFTER the config update so that the ACL mask is correct
+        # on files written by atomic_json_save (which creates with mode 0600).
+        if config.linux_user:
+            await self._fix_agent_perms(name)
 
         self._stacks[name] = stack
         self._health[name] = AgentHealth(name=name)
@@ -470,6 +500,48 @@ class AgentSupervisor:
             health.mark_stopped()
 
         logger.info("Sub-agent '%s' stopped", name)
+
+    # ------------------------------------------------------------------
+    # Linux user provisioning
+    # ------------------------------------------------------------------
+
+    _PROVISIONING_SCRIPT = "/opt/ductor/scripts/manage-agent-user.sh"
+
+    async def _ensure_agent_user(self, agent_name: str) -> None:
+        """Create the Linux user for an isolated agent (idempotent)."""
+        import getpass
+
+        ductor_user = getpass.getuser()
+        proc = await asyncio.create_subprocess_exec(
+            "sudo", self._PROVISIONING_SCRIPT, "create", agent_name, ductor_user,
+            stdout=asyncio.subprocess.PIPE,
+            stderr=asyncio.subprocess.PIPE,
+        )
+        stdout, stderr = await proc.communicate()
+        if proc.returncode != 0:
+            logger.error(
+                "Failed to provision user ductor-%s: %s",
+                agent_name,
+                stderr.decode(errors="replace").strip(),
+            )
+        else:
+            logger.info(
+                "Agent user ductor-%s: %s",
+                agent_name,
+                stdout.decode(errors="replace").strip(),
+            )
+
+    async def _fix_agent_perms(self, agent_name: str) -> None:
+        """Ensure the ductor user owns the workspace and the agent user has ACL access."""
+        import getpass
+
+        ductor_user = getpass.getuser()
+        proc = await asyncio.create_subprocess_exec(
+            "sudo", self._PROVISIONING_SCRIPT, "fix-perms", agent_name, ductor_user,
+            stdout=asyncio.subprocess.PIPE,
+            stderr=asyncio.subprocess.PIPE,
+        )
+        await proc.communicate()
 
     async def start_agent_by_name(self, name: str) -> str:
         """Start a sub-agent by name from the registry. Returns status message."""
@@ -526,27 +598,26 @@ class AgentSupervisor:
                 if existing is None:
                     continue
 
-                # Rebuild config and compare token (cheapest change detection)
+                # Rebuild config and compare credentials
                 agent_home = self._main_paths.ductor_home / "agents" / name
                 new_config = merge_sub_agent_config(self._main_config, sub_cfg, agent_home)
-                if new_config.telegram_token != existing.config.telegram_token:
-                    logger.info("agents.json: agent '%s' token changed, restarting", name)
+                if _config_changed(new_config, existing.config):
+                    logger.info("agents.json: agent '%s' config changed, restarting", name)
                     await self.stop_agent(name)
                     await self._start_sub_agent(sub_cfg)
 
     # -- Notifications ------------------------------------------------------
 
     async def _notify_main_agent(self, message: str) -> None:
-        """Send a system notification to the main agent's Telegram users."""
-        if self._notify_sender is None:
-            return
+        """Send a system notification to the main agent's users/rooms."""
         main = self._stacks.get("main")
         if main is None:
             return
+        ns = main.bot.notification_service
+        if ns is None:
+            return
         try:
-            bot_instance = main.bot.bot_instance
-            for uid in main.config.allowed_user_ids:
-                await self._notify_sender(bot_instance, uid, f"**[Supervisor]** {message}", None)
+            await ns.notify_all(f"**[Supervisor]** {message}")
         except Exception:
             logger.exception("Failed to notify main agent")
 

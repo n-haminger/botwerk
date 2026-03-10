@@ -32,6 +32,7 @@ from ductor_bot.bot.handlers import (
     handle_abort,
     handle_abort_all,
     handle_command,
+    handle_interrupt,
     handle_new_session,
     strip_mention,
 )
@@ -64,6 +65,7 @@ from ductor_bot.bus.lock_pool import LockPool
 from ductor_bot.commands import BOT_COMMANDS as _COMMAND_DEFS
 from ductor_bot.commands import MULTIAGENT_SUB_COMMANDS as _MA_SUB_DEFS
 from ductor_bot.config import AgentConfig
+from ductor_bot.notifications import NotificationService
 from ductor_bot.files.allowed_roots import resolve_allowed_roots
 from ductor_bot.infra.restart import EXIT_RESTART, consume_restart_marker
 from ductor_bot.infra.updater import UpdateObserver
@@ -103,7 +105,7 @@ def _help_line(command: str) -> str:
 _HELP_TEXT = fmt(
     "**Command Reference**",
     SEP,
-    f"Daily\n{_help_line('new')}\n{_help_line('stop')}\n{_help_line('stop_all')}\n"
+    f"Daily\n{_help_line('new')}\n{_help_line('stop')}\n{_help_line('interrupt')}\n{_help_line('stop_all')}\n"
     f"{_help_line('model')}\n{_help_line('status')}\n{_help_line('memory')}",
     f"Automation\n{_help_line('session')}\n{_help_line('tasks')}\n{_help_line('cron')}",
     f"Multi-Agent\n{_help_line('agent_commands')}",
@@ -123,6 +125,21 @@ async def _cancel_task(task: asyncio.Task[None] | None) -> None:
             await task
 
 
+class TelegramNotificationService:
+    """NotificationService implementation for Telegram."""
+
+    def __init__(self, bot: Bot, config: AgentConfig) -> None:
+        self._bot = bot
+        self._config = config
+
+    async def notify(self, chat_id: int, text: str) -> None:
+        await send_rich(self._bot, chat_id, text, None)
+
+    async def notify_all(self, text: str) -> None:
+        for uid in self._config.allowed_user_ids:
+            await send_rich(self._bot, uid, text, None)
+
+
 class TelegramBot:
     """Telegram frontend. All logic lives in the Orchestrator."""
 
@@ -135,6 +152,9 @@ class TelegramBot:
         self._bot = Bot(
             token=config.telegram_token,
             default=DefaultBotProperties(parse_mode=ParseMode.HTML),
+        )
+        self._notification_service: NotificationService = TelegramNotificationService(
+            self._bot, config
         )
         self._bot_id: int | None = None
         self._bot_username: str | None = None
@@ -163,6 +183,7 @@ class TelegramBot:
             lock_pool=self._lock_pool, topic_names=self._topic_names
         )
         self._sequential.set_bot(self._bot)
+        self._sequential.set_interrupt_handler(self._on_interrupt)
         self._sequential.set_abort_handler(self._on_abort)
         self._sequential.set_abort_all_handler(self._on_abort_all)
         self._sequential.set_quick_command_handler(self._on_quick_command)
@@ -209,6 +230,15 @@ class TelegramBot:
     def config(self) -> AgentConfig:
         """Public read-only access to the agent configuration."""
         return self._config
+
+    @property
+    def notification_service(self) -> NotificationService:
+        """Transport-agnostic notification interface."""
+        return self._notification_service
+
+    def register_startup_hook(self, hook: Callable[[], Awaitable[None]]) -> None:
+        """Register a callback to run after bot startup (used by supervisor)."""
+        self._dp.startup.register(hook)
 
     @property
     def sequential(self) -> SequentialMiddleware:
@@ -320,6 +350,8 @@ class TelegramBot:
             if self._chat_tracker:
                 self._chat_tracker.record_leave(chat.id, "auto_left")
             logger.info("Auto-left unauthorized group chat_id=%d title=%s", chat.id, chat.title)
+            return
+        await self._send_join_notification(chat.id)
 
     async def _on_bot_removed(self, event: ChatMemberUpdated) -> None:
         """Bot was removed from a group."""
@@ -328,6 +360,25 @@ class TelegramBot:
         if self._chat_tracker:
             self._chat_tracker.record_leave(chat.id, status)
         logger.info("Bot removed from group chat_id=%d status=%s", chat.id, status)
+
+    async def _send_join_notification(self, chat_id: int) -> None:
+        """Send JOIN_NOTIFICATION.md content and try to pin it."""
+        if not self._orchestrator:
+            return
+        path = self._orch.paths.join_notification_path
+        if not path.is_file():
+            return
+        text = path.read_text(encoding="utf-8").strip()
+        if not text:
+            return
+        from ductor_bot.bot.sender import _send_text_chunks
+
+        msg = await _send_text_chunks(self._bot, chat_id, text)
+        if msg:
+            with contextlib.suppress(TelegramAPIError):
+                await self._bot.pin_chat_message(
+                    chat_id, msg.message_id, disable_notification=True
+                )
 
     _GROUP_AUDIT_INTERVAL = 86400  # 24 hours
 
@@ -539,6 +590,7 @@ class TelegramBot:
     async def _on_start(self, message: Message) -> None:
         """Handle /start: always show welcome screen."""
         await self._show_welcome(message)
+        await self._send_join_notification(message.chat.id)
 
     async def _on_help(self, message: Message) -> None:
         """Handle /help: show command reference."""
@@ -630,6 +682,14 @@ class TelegramBot:
         )
 
     # -- Abort, commands, sessions ---------------------------------------------
+
+    async def _on_interrupt(self, chat_id: int, message: Message) -> bool:
+        return await handle_interrupt(
+            self._orchestrator,
+            self._bot,
+            chat_id=chat_id,
+            message=message,
+        )
 
     async def _on_abort_all(self, chat_id: int, message: Message) -> bool:
         return await handle_abort_all(

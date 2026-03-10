@@ -13,6 +13,7 @@ from ductor_bot.config import (
     CLIParametersConfig,
     DockerConfig,
     HeartbeatConfig,
+    MatrixConfig,
     StreamingConfig,
     WebhookConfig,
 )
@@ -21,14 +22,24 @@ from ductor_bot.config import (
 class SubAgentConfig(BaseModel):
     """Minimal sub-agent definition from agents.json.
 
-    Only ``name``, ``telegram_token``, and ``allowed_user_ids`` are required.
+    Only ``name`` is strictly required. Telegram agents need ``telegram_token``
+    and ``allowed_user_ids``; Matrix agents need ``matrix`` config.
     All other fields are optional and inherit from the main agent config.
     """
 
     name: str
-    telegram_token: str
+    transport: str = "telegram"  # "telegram" | "matrix"
+
+    # Telegram credentials (required when transport=telegram)
+    telegram_token: str = ""
     allowed_user_ids: list[int] | None = None
     allowed_group_ids: list[int] | None = None
+
+    # Matrix credentials (required when transport=matrix)
+    matrix: MatrixConfig | None = None
+
+    # Group behaviour
+    group_mention_only: bool | None = None
 
     # Optional overrides — inherit from main agent if None
     provider: str | None = None
@@ -53,6 +64,7 @@ class SubAgentConfig(BaseModel):
     api: ApiConfig | None = None
     cli_parameters: CLIParametersConfig | None = None
     user_timezone: str | None = None
+    linux_user: bool | None = None  # Run CLI as dedicated Linux user (ductor-<name>)
 
 
 def merge_sub_agent_config(
@@ -71,13 +83,18 @@ def merge_sub_agent_config(
     base = main.model_dump()
 
     # agents.json explicit overrides (non-None fields win)
-    overrides = sub.model_dump(exclude_none=True, exclude={"name"})
+    overrides = sub.model_dump(exclude_none=True, exclude={"name", "linux_user"})
     base.update(overrides)
 
     base["ductor_home"] = str(agent_home)
+    if sub.linux_user:
+        base["linux_user"] = f"ductor-{sub.name}"
+    base["transport"] = sub.transport
     base["telegram_token"] = sub.telegram_token
     base["allowed_user_ids"] = sub.allowed_user_ids or []
     base["allowed_group_ids"] = sub.allowed_group_ids or []
+    if sub.matrix is not None:
+        base["matrix"] = sub.matrix.model_dump()
 
     # Sub-agents don't need the user-facing API server (they use InterAgentBus).
     # Disable it unless the sub-agent explicitly provides an api config.

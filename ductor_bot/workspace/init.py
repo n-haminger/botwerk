@@ -92,10 +92,14 @@ def _is_zone2_py_file(entry: Path, src: Path, root_src: Path) -> bool:
 
 
 def _copy_with_symlink_check(entry: Path, target: Path) -> None:
-    """Copy file to target, removing symlink if present."""
+    """Copy file to target, removing symlink if present.
+
+    Uses copyfile (content-only) to avoid chmod/utime failures when the
+    target is owned by a different Linux user (linux_user isolation).
+    """
     if target.is_symlink():
         target.unlink()
-    shutil.copy2(entry, target)
+    shutil.copyfile(entry, target)
 
 
 def _handle_zone2_file(entry: Path, target: Path, dst: Path) -> None:
@@ -118,7 +122,7 @@ def _handle_regular_file(entry: Path, target: Path, src: Path, root_src: Path) -
         logger.debug("Zone 2 copy (framework tool): %s", target)
     elif not target.exists():
         # Zone 3: seed only (user-owned, never overwritten)
-        shutil.copy2(entry, target)
+        shutil.copyfile(entry, target)
         logger.debug("Zone 3 seed: %s", target)
     else:
         logger.debug("Zone 3 skip: %s (exists)", target)
@@ -192,7 +196,7 @@ def _sync_group(directory: Path) -> None:
         if name == newest_name:
             continue
         if path.exists() and path.stat().st_mtime < newest_mtime:
-            shutil.copy2(newest_path, path)
+            shutil.copyfile(newest_path, path)
 
 
 # ---------------------------------------------------------------------------
@@ -264,12 +268,11 @@ _REQUIRED_DIRS = (
     "workspace/tools",
     "workspace/tools/user_tools",
     "workspace/tools/cron_tools",
-    "workspace/tools/telegram_tools",
+    "workspace/tools/media_tools",
     "workspace/tools/webhook_tools",
     "workspace/tools/agent_tools",
     "workspace/output_to_user",
     "workspace/tasks",
-    "workspace/telegram_files",
     "workspace/skills",
     "config",
 )
@@ -338,6 +341,68 @@ _HOST_NOTICE = """
 """
 
 # ---------------------------------------------------------------------------
+# Transport-specific messenger rules
+# ---------------------------------------------------------------------------
+
+_TRANSPORT_TELEGRAM = """
+
+---
+
+## Messenger Rules
+
+- Replies are Telegram messages (4096-char limit; auto-split is handled).
+- Keep responses mobile-friendly and structured.
+- To send files, use `<file:/absolute/path>`.
+- Save generated deliverables in `output_to_user/`.
+- Do not suggest GUI-only actions like `xdg-open`.
+
+### Quick Reply Buttons
+
+Use button syntax at the end of messages:
+
+- `[button:Label]` markers
+- same line = one row
+- new line = new row
+
+Keep labels short. Callback data is truncated to 64 bytes by the framework.
+Do not place button markers inside code blocks.
+"""
+
+_TRANSPORT_MATRIX = """
+
+---
+
+## Messenger Rules
+
+- Replies are Matrix messages (no hard character limit, but keep responses readable).
+- Messages are formatted as HTML (Markdown is auto-converted by the framework).
+- Keep responses structured and scannable.
+- To send files, use `<file:/absolute/path>`.
+- Save generated deliverables in `output_to_user/`.
+- Do not suggest GUI-only actions like `xdg-open`.
+- Commands use `!` prefix (e.g. `!help`, `!status`). \
+`/` also works but may conflict with Element's built-in commands.
+
+### Quick Reply Buttons
+
+Use button syntax at the end of messages:
+
+- `[button:Label]` markers
+- same line = one row
+- new line = new row
+
+In Matrix, buttons are rendered as a numbered text list. The user types \
+the label text (or number) to "press" a button — there are no clickable \
+inline buttons. Keep labels short and distinctive.
+Do not place button markers inside code blocks.
+"""
+
+_TRANSPORT_RULES: dict[str, str] = {
+    "telegram": _TRANSPORT_TELEGRAM,
+    "matrix": _TRANSPORT_MATRIX,
+}
+
+# ---------------------------------------------------------------------------
 # Multi-Agent identity injection
 # ---------------------------------------------------------------------------
 
@@ -351,13 +416,13 @@ _IDENTITY_MAIN = """
 
 - You are the primary agent and coordinator in a multi-agent system.
 - You can create, manage, and communicate with sub-agents.
-- Each sub-agent has its own **Telegram bot** with a separate chat.
+- Each sub-agent has its own **bot** with a separate chat (Telegram or Matrix).
 
 ### How the user interacts with sub-agents
 
 The user has TWO ways to use a sub-agent:
 
-1. **Direct chat**: The user opens the sub-agent's Telegram bot and chats \
+1. **Direct chat**: The user opens the sub-agent's bot and chats \
 directly. This is the primary way — each sub-agent is a full independent \
 assistant with its own memory and workspace.
 2. **Delegation via you**: The user asks YOU to delegate a task. You use \
@@ -365,7 +430,7 @@ the agent tools below to send the task. The response comes back to YOUR \
 chat (never to the sub-agent's chat).
 
 **After creating a sub-agent, always tell the user they can open the \
-sub-agent's Telegram chat directly to talk to it.** Do not suggest \
+sub-agent's chat directly to talk to it.** Do not suggest \
 Python tool commands to the user — those are for YOU to use internally.
 
 ### Agent tools (for YOUR internal use)
@@ -381,7 +446,7 @@ Use async for tasks that may take more than a few seconds.
 
 When you delegate a task asynchronously, the sub-agent processes it in a \
 Named Session called `ia-{name}`. The user can continue that session \
-in the sub-agent's Telegram chat via `@ia-{name} <message>`. When \
+in the sub-agent's chat via `@ia-{name} <message>`. When \
 reporting results to the user, mention this session name so they know \
 how to follow up directly with the sub-agent.
 """
@@ -396,7 +461,7 @@ _IDENTITY_SUB = """
 
 - You are a specialized sub-agent in a multi-agent system.
 - The main agent coordinates the overall system.
-- You have your own workspace, memory, and Telegram bot.
+- You have your own workspace, memory, and {transport} bot.
 
 ### Communication Tools
 
@@ -406,7 +471,7 @@ _IDENTITY_SUB = """
 
 **Important**: Responses always come back to the calling agent, never to \
 a different chat. There is no way to send answers to another agent's \
-Telegram chat via these tools.
+chat via these tools.
 
 ### Inter-Agent Named Sessions
 
@@ -414,9 +479,9 @@ When another agent sends you a message, it runs in a **Named Session** \
 called `ia-{{sender}}` (e.g. `ia-main`). These sessions:
 
 - Preserve context across multiple messages from the same sender agent
-- Run in the background, independent of your direct Telegram chat
+- Run in the background, independent of your direct chat
 - Are visible to the user via `/sessions` and can be continued \
-manually with `@ia-{{sender}} <message>` in your Telegram chat
+manually with `@ia-{{sender}} <message>` in your chat
 
 When you receive an `[INTER-AGENT MESSAGE]` marker, respond directly \
 and concisely. If the user asks about running tasks or background \
@@ -425,11 +490,12 @@ inter-agent sessions.
 """
 
 
-def _build_identity_notice(agent_name: str) -> str:
+def _build_identity_notice(agent_name: str, transport: str) -> str:
     """Build the identity section for rule files."""
     if agent_name == "main":
         return _IDENTITY_MAIN.format(name=agent_name)
-    return _IDENTITY_SUB.format(name=agent_name)
+    transport_label = transport.capitalize()  # "telegram" → "Telegram"
+    return _IDENTITY_SUB.format(name=agent_name, transport=transport_label)
 
 
 def inject_runtime_environment(
@@ -437,15 +503,17 @@ def inject_runtime_environment(
     *,
     docker_container: str,
     agent_name: str = "main",
+    transport: str = "telegram",
 ) -> None:
-    """Append agent identity and runtime environment sections to workspace rule files.
+    """Append transport rules, agent identity, and runtime environment to rule files.
 
-    Called once after workspace init when the Docker state is known.
+    Called once after workspace init when the Docker state and transport are known.
     """
     env_notice = (
         _DOCKER_NOTICE.format(container=docker_container) if docker_container else _HOST_NOTICE
     )
-    identity_notice = _build_identity_notice(agent_name)
+    identity_notice = _build_identity_notice(agent_name, transport)
+    transport_notice = _TRANSPORT_RULES.get(transport, _TRANSPORT_TELEGRAM)
 
     for name in _RULE_FILE_NAMES:
         target = paths.workspace / name
@@ -455,11 +523,14 @@ def inject_runtime_environment(
         # Avoid duplicate injection on restart without workspace re-init
         if "## Multi-Agent Identity" in content or "## Runtime Environment" in content:
             continue
-        atomic_text_save(target, content + identity_notice + env_notice)
+        atomic_text_save(
+            target, content + transport_notice + identity_notice + env_notice
+        )
     logger.info(
-        "Runtime environment injected: %s agent=%s",
+        "Runtime environment injected: %s agent=%s transport=%s",
         "docker" if docker_container else "host",
         agent_name,
+        transport,
     )
 
 
