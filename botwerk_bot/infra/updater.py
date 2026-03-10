@@ -11,7 +11,7 @@ import sys
 from collections.abc import Awaitable, Callable
 from pathlib import Path
 
-from botwerk_bot.infra.version import VersionInfo, _parse_version, check_pypi
+from botwerk_bot.infra.version import VersionInfo, _parse_version, check_github_releases
 
 logger = logging.getLogger(__name__)
 
@@ -25,7 +25,7 @@ _UPGRADE_SENTINEL_NAME = "upgrade-sentinel.json"
 
 
 class UpdateObserver:
-    """Background task that checks PyPI for new versions periodically."""
+    """Background task that checks GitHub Releases for new versions periodically."""
 
     def __init__(self, *, notify: VersionCallback) -> None:
         self._notify = notify
@@ -45,7 +45,7 @@ class UpdateObserver:
         await asyncio.sleep(_INITIAL_DELAY_S)
         while True:
             try:
-                info = await check_pypi()
+                info = await check_github_releases()
                 if info and info.update_available and info.latest != self._last_notified:
                     self._last_notified = info.latest
                     await self._notify(info)
@@ -74,28 +74,32 @@ def _is_newer_version(candidate: str, current: str) -> bool:
     return _parse_version(candidate) > _parse_version(current)
 
 
+_GITHUB_REPO = "https://github.com/n-haminger/botwerk"
+
+
+def _github_install_spec(target_version: str | None) -> str:
+    """Build a pip install spec for a GitHub release."""
+    if target_version:
+        return f"botwerk @ {_GITHUB_REPO}/archive/refs/tags/v{target_version}.tar.gz"
+    return f"botwerk @ git+{_GITHUB_REPO}.git"
+
+
 def _build_upgrade_command(
     *,
     mode: str,
     target_version: str | None,
     force_reinstall: bool,
 ) -> list[str]:
-    """Build provider-specific upgrade command."""
+    """Build provider-specific upgrade command (installs from GitHub)."""
+    spec = _github_install_spec(target_version)
+
     if mode == "pipx":
-        # On non-Windows, prefer `pipx upgrade` for plain upgrades (no pin).
-        if target_version is None and not force_reinstall and sys.platform != "win32":
-            return ["pipx", "upgrade", "--force", "botwerk"]
-        # `pipx runpip` upgrades inside the venv.  On Windows this is
-        # required because `pipx upgrade` tries to overwrite the global
-        # botwerk.exe which the running process holds locked.
-        spec = f"botwerk=={target_version}" if target_version else "botwerk"
         cmd = ["pipx", "runpip", "botwerk", "install", "--upgrade", "--no-cache-dir"]
         if force_reinstall:
             cmd.append("--force-reinstall")
         cmd.append(spec)
         return cmd
 
-    spec = f"botwerk=={target_version}" if target_version else "botwerk"
     cmd = [sys.executable, "-m", "pip", "install", "--upgrade", "--no-cache-dir"]
     if force_reinstall:
         cmd.append("--force-reinstall")
@@ -144,20 +148,7 @@ async def _perform_upgrade_impl(
         force_reinstall=force_reinstall,
     )
     ok, output = await _run_upgrade_command(cmd, env=env)
-    if ok:
-        return True, output
-
-    # Older pipx setups may not support/handle runpip as expected.
-    # Fall back to plain pipx upgrade so we keep behavior resilient.
-    # On Windows the fallback would hit the same PermissionError on the
-    # locked exe, so skip it there.
-    if mode == "pipx" and normalized_target is not None and sys.platform != "win32":
-        fallback_cmd = ["pipx", "upgrade", "--force", "botwerk"]
-        fb_ok, fb_output = await _run_upgrade_command(fallback_cmd, env=env)
-        combined = "\n\n".join(part for part in (output.strip(), fb_output.strip()) if part)
-        return fb_ok, combined
-
-    return False, output
+    return ok, output
 
 
 async def get_installed_version() -> str:
@@ -202,7 +193,7 @@ async def _resolve_retry_target(current_version: str, target_version: str | None
     if normalized_target and _is_newer_version(normalized_target, current_version):
         return normalized_target
 
-    info = await check_pypi(fresh=True)
+    info = await check_github_releases()
     if info and _is_newer_version(info.latest, current_version):
         return info.latest
     return None
@@ -250,12 +241,10 @@ async def perform_upgrade_pipeline(
     if installed != current_version:
         return True, installed, _combine_outputs(outputs)
 
-    # Detect PyPI CDN propagation delay — the JSON API may announce a
-    # version before the package index used by pip has it available.
     combined = _combine_outputs(outputs)
     if "No matching distribution found" in combined:
         outputs.append(
-            "The new version may not have propagated to all PyPI mirrors yet. "
+            "The release archive may not be available yet. "
             "Please try again in a few minutes."
         )
 

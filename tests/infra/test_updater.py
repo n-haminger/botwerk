@@ -150,7 +150,7 @@ class TestUpdateObserver:
         observer = UpdateObserver(notify=notify)
 
         with (
-            patch("botwerk_bot.infra.updater.check_pypi", return_value=info),
+            patch("botwerk_bot.infra.updater.check_github_releases", return_value=info),
             patch("botwerk_bot.infra.updater._INITIAL_DELAY_S", 0),
             patch("botwerk_bot.infra.updater._CHECK_INTERVAL_S", 0.01),
         ):
@@ -166,7 +166,7 @@ class TestUpdateObserver:
         observer = UpdateObserver(notify=notify)
 
         with (
-            patch("botwerk_bot.infra.updater.check_pypi", return_value=info),
+            patch("botwerk_bot.infra.updater.check_github_releases", return_value=info),
             patch("botwerk_bot.infra.updater._INITIAL_DELAY_S", 0),
             patch("botwerk_bot.infra.updater._CHECK_INTERVAL_S", 0.01),
         ):
@@ -182,7 +182,7 @@ class TestUpdateObserver:
         observer = UpdateObserver(notify=notify)
 
         with (
-            patch("botwerk_bot.infra.updater.check_pypi", return_value=info),
+            patch("botwerk_bot.infra.updater.check_github_releases", return_value=info),
             patch("botwerk_bot.infra.updater._INITIAL_DELAY_S", 0),
             patch("botwerk_bot.infra.updater._CHECK_INTERVAL_S", 0.01),
         ):
@@ -199,7 +199,7 @@ class TestUpdateObserver:
         observer = UpdateObserver(notify=notify)
 
         with (
-            patch("botwerk_bot.infra.updater.check_pypi", side_effect=RuntimeError("network")),
+            patch("botwerk_bot.infra.updater.check_github_releases", side_effect=RuntimeError("network")),
             patch("botwerk_bot.infra.updater._INITIAL_DELAY_S", 0),
             patch("botwerk_bot.infra.updater._CHECK_INTERVAL_S", 0.01),
         ):
@@ -209,12 +209,12 @@ class TestUpdateObserver:
 
         notify.assert_not_called()
 
-    async def test_handles_none_from_check_pypi(self) -> None:
+    async def test_handles_none_from_check_github_releases(self) -> None:
         notify = AsyncMock()
         observer = UpdateObserver(notify=notify)
 
         with (
-            patch("botwerk_bot.infra.updater.check_pypi", return_value=None),
+            patch("botwerk_bot.infra.updater.check_github_releases", return_value=None),
             patch("botwerk_bot.infra.updater._INITIAL_DELAY_S", 0),
             patch("botwerk_bot.infra.updater._CHECK_INTERVAL_S", 0.01),
         ):
@@ -245,7 +245,7 @@ class TestUpdateObserver:
         observer = UpdateObserver(notify=notify)
 
         with (
-            patch("botwerk_bot.infra.updater.check_pypi", side_effect=mock_check),
+            patch("botwerk_bot.infra.updater.check_github_releases", side_effect=mock_check),
             patch("botwerk_bot.infra.updater._INITIAL_DELAY_S", 0),
             patch("botwerk_bot.infra.updater._CHECK_INTERVAL_S", 0.01),
         ):

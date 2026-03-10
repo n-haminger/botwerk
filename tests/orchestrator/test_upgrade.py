@@ -18,7 +18,7 @@ class TestCmdUpgrade:
         )
         with (
             patch("botwerk_bot.infra.install.detect_install_mode", return_value="pipx"),
-            patch("botwerk_bot.orchestrator.commands.check_pypi", return_value=info),
+            patch("botwerk_bot.orchestrator.commands.check_github_releases", return_value=info),
         ):
             result = await cmd_upgrade(orch, 1, "/upgrade")
 
@@ -37,7 +37,7 @@ class TestCmdUpgrade:
         info = VersionInfo(current="2.0.0", latest="2.0.0", update_available=False, summary="")
         with (
             patch("botwerk_bot.infra.install.detect_install_mode", return_value="pip"),
-            patch("botwerk_bot.orchestrator.commands.check_pypi", return_value=info),
+            patch("botwerk_bot.orchestrator.commands.check_github_releases", return_value=info),
         ):
             result = await cmd_upgrade(orch, 1, "/upgrade")
 
@@ -50,18 +50,18 @@ class TestCmdUpgrade:
     async def test_handles_pypi_failure(self, orch: Orchestrator) -> None:
         with (
             patch("botwerk_bot.infra.install.detect_install_mode", return_value="pipx"),
-            patch("botwerk_bot.orchestrator.commands.check_pypi", return_value=None),
+            patch("botwerk_bot.orchestrator.commands.check_github_releases", return_value=None),
         ):
             result = await cmd_upgrade(orch, 1, "/upgrade")
 
-        assert "could not reach" in result.text.lower() or "pypi" in result.text.lower()
+        assert "could not reach" in result.text.lower() or "github" in result.text.lower()
         assert result.buttons is None
 
     async def test_button_text_is_user_friendly(self, orch: Orchestrator) -> None:
         info = VersionInfo(current="1.0.0", latest="1.1.0", update_available=True, summary="Patch")
         with (
             patch("botwerk_bot.infra.install.detect_install_mode", return_value="pipx"),
-            patch("botwerk_bot.orchestrator.commands.check_pypi", return_value=info),
+            patch("botwerk_bot.orchestrator.commands.check_github_releases", return_value=info),
         ):
             result = await cmd_upgrade(orch, 1, "/upgrade")
 
@@ -75,7 +75,7 @@ class TestCmdUpgrade:
         info = VersionInfo(current="3.5.1", latest="3.5.1", update_available=False, summary="")
         with (
             patch("botwerk_bot.infra.install.detect_install_mode", return_value="pip"),
-            patch("botwerk_bot.orchestrator.commands.check_pypi", return_value=info),
+            patch("botwerk_bot.orchestrator.commands.check_github_releases", return_value=info),
         ):
             result = await cmd_upgrade(orch, 1, "/upgrade")
 
@@ -86,7 +86,7 @@ class TestCmdUpgrade:
         info = VersionInfo(current="1.0.0", latest="2.0.0", update_available=True, summary="Update")
         with (
             patch("botwerk_bot.infra.install.detect_install_mode", return_value="pipx"),
-            patch("botwerk_bot.orchestrator.commands.check_pypi", return_value=info),
+            patch("botwerk_bot.orchestrator.commands.check_github_releases", return_value=info),
         ):
             result = await cmd_upgrade(orch, 1, "/upgrade")
 

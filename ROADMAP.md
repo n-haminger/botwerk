@@ -21,18 +21,16 @@ maintained independently at [n-haminger/botwerk](https://github.com/n-haminger/b
 - [x] CLI timeout session preservation
 - [x] Transport-neutral refactoring and setup parity
 
-## In Progress
-
 ### Phase 4: Update System (PyPI -> GitHub Releases)
-- [ ] Implement `check_github_releases()` in `botwerk_bot/infra/version.py`
-- [ ] Update `UpdateObserver` to poll GitHub Releases API instead of PyPI
-- [ ] Change upgrade command to install from GitHub Release assets (`.whl`)
-- [ ] Update `/upgrade` Telegram command and `botwerk upgrade` CLI
-- [ ] Test end-to-end upgrade flow
+- [x] Implement `check_github_releases()` in `botwerk_bot/infra/version.py`
+- [x] Update `UpdateObserver` to poll GitHub Releases API instead of PyPI
+- [x] Change upgrade command to install from GitHub archive URLs
+- [x] Update `/upgrade` command and `botwerk upgrade` CLI
+- [x] Update tests for GitHub Releases API
 
 ### Phase 5: CI/CD
-- [ ] Add `test.yml` workflow (pytest + ruff on push/PR to main)
-- [ ] Add `release.yml` workflow (build + GitHub Release on `v*` tags)
+- [x] Add `test.yml` workflow (pytest + ruff on push/PR to main)
+- [x] Add `release.yml` workflow (build + GitHub Release on `v*` tags)
 - [ ] Set up branch protection rules on main
 
 ### Phase 6: Branding
@@ -41,12 +39,12 @@ maintained independently at [n-haminger/botwerk](https://github.com/n-haminger/b
 - [x] Delete obsolete ductor-branded images (logo_text.png, welcome.png, screenshots)
 - [ ] Update bot welcome screens and onboarding text
 
-## Planned
-
 ### Phase 7: First Release
-- [ ] Bump version to 1.0.0
+- [x] Bump version to 1.0.0
 - [ ] Tag `v1.0.0` and verify release workflow
 - [ ] Test clean install from GitHub Release
+
+## Planned
 
 ### Upstream Sync Strategy
 - Upstream (`PleasePrompto/ductor`) is kept as a read-only remote

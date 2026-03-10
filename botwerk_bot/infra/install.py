@@ -20,7 +20,7 @@ def detect_install_mode() -> InstallMode:
 
     Returns:
         ``"pipx"`` -- installed via ``pipx install botwerk``
-        ``"pip"``  -- installed via ``pip install botwerk`` (from PyPI)
+        ``"pip"``  -- installed via ``pip install botwerk`` (from PyPI or GitHub)
         ``"dev"``  -- editable install (``pip install -e .``) or running from source
     """
     if "pipx" in sys.prefix:
