@@ -74,6 +74,14 @@ def _is_newer_version(candidate: str, current: str) -> bool:
     return _parse_version(candidate) > _parse_version(current)
 
 
+def _is_externally_managed() -> bool:
+    """Detect PEP 668 externally-managed Python (e.g. Ubuntu 23.04+)."""
+    import sysconfig
+
+    marker = Path(sysconfig.get_path("stdlib")) / "EXTERNALLY-MANAGED"
+    return marker.is_file()
+
+
 _GITHUB_REPO = "https://github.com/n-haminger/botwerk"
 
 
@@ -101,6 +109,8 @@ def _build_upgrade_command(
         return cmd
 
     cmd = [sys.executable, "-m", "pip", "install", "--upgrade", "--no-cache-dir"]
+    if _is_externally_managed():
+        cmd.append("--break-system-packages")
     if force_reinstall:
         cmd.append("--force-reinstall")
     cmd.append(spec)
