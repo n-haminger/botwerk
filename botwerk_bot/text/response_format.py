@@ -78,22 +78,14 @@ def new_session_text(provider: str) -> str:
     provider_label = {"claude": "Claude", "codex": "Codex", "gemini": "Gemini"}.get(
         provider.lower(), provider
     )
-    return fmt(
-        "**Session Reset**",
-        SEP,
-        f"Session reset for {provider_label} in this chat only.\n"
-        "Other provider sessions were preserved.\n"
-        "Send a message to continue.",
-    )
+    return f"**Session Reset** — {provider_label} session cleared, send a message to continue."
 
 
 def stop_text(killed: bool, provider: str) -> str:
     """Build the /stop response."""
     if killed:
-        body = f"{provider} terminated. All queued messages discarded."
-    else:
-        body = "Nothing running right now."
-    return fmt("**Agent Stopped**", SEP, body)
+        return f"**Stopped** — {provider} terminated, queued messages discarded."
+    return "**Stopped** — nothing running right now."
 
 
 # -- Timeout messages --
@@ -149,9 +141,9 @@ def startup_notification_text(kind: str) -> str:
     ``service_restart`` is silent (handled by the existing sentinel system).
     """
     if kind == "first_start":
-        return fmt("**Bot Started**", SEP, "First start — ready to go.")
+        return "**Bot Started** — ready to go."
     if kind == "system_reboot":
-        return fmt("**Bot Started**", SEP, "System reboot detected — back online.")
+        return "**Bot Started** — system reboot detected, back online."
     return ""
 
 

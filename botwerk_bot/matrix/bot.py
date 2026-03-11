@@ -27,7 +27,7 @@ from botwerk_bot.matrix.sender import send_rich as matrix_send_rich
 from botwerk_bot.matrix.typing import MatrixTypingContext
 from botwerk_bot.notifications import NotificationService
 from botwerk_bot.session.key import SessionKey
-from botwerk_bot.text.response_format import SEP, fmt
+from botwerk_bot.text.response_format import SEP, fmt, stop_text
 
 if TYPE_CHECKING:
     from nio import AsyncClient, MatrixRoom, RoomMessageMedia, RoomMessageText
@@ -398,7 +398,7 @@ class MatrixBot:
         orch = self._orchestrator
         if orch:
             killed = await orch.abort(key.chat_id)
-            msg = f"Stopped {killed} process(es)." if killed else "No active processes."
+            msg = stop_text(bool(killed), orch.active_provider_name)
             await self._send_rich(room_id, msg)
 
     async def _cmd_interrupt(
@@ -407,9 +407,7 @@ class MatrixBot:
         orch = self._orchestrator
         if orch:
             interrupted = orch.interrupt(key.chat_id)
-            msg = (
-                f"Interrupted {interrupted} process(es)." if interrupted else "No active processes."
-            )
+            msg = f"**Interrupt** — {interrupted} process(es) interrupted." if interrupted else "**Interrupt** — nothing running."
             await self._send_rich(room_id, msg)
 
     async def _cmd_stop_all(
@@ -421,7 +419,7 @@ class MatrixBot:
             killed = await orch.abort(key.chat_id)
         if self._abort_all_callback:
             killed += await self._abort_all_callback()
-        msg = f"Stopped {killed} process(es)." if killed else "No active processes."
+        msg = f"**Stop All** — {killed} process(es) stopped across all agents." if killed else "**Stop All** — nothing running."
         await self._send_rich(room_id, msg)
 
     async def _cmd_restart(
@@ -431,10 +429,7 @@ class MatrixBot:
 
         home = Path(self._config.botwerk_home).expanduser()
         write_restart_marker(marker_path=home / "restart-requested")
-        await self._send_rich(
-            room_id,
-            fmt("**Restarting**", SEP, "Bot is shutting down and will be back shortly."),
-        )
+        await self._send_rich(room_id, "**Restarting** — shutting down, back shortly.")
         self._exit_code = EXIT_RESTART
         if self._sync_task and not self._sync_task.done():
             self._sync_task.cancel()

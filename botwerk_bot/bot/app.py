@@ -971,7 +971,7 @@ class TelegramBot:
         await asyncio.to_thread(
             write_restart_sentinel, chat_id, "Restart completed.", sentinel_path=sentinel
         )
-        text = fmt("**Restarting**", SEP, "Bot is shutting down and will be back shortly.")
+        text = "**Restarting** — shutting down, back shortly."
         await send_rich(
             self._bot,
             message.chat.id,

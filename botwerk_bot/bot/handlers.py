@@ -38,7 +38,7 @@ async def handle_interrupt(
 
     interrupted = orchestrator.interrupt(chat_id)
     logger.info("Interrupt requested interrupted=%d", interrupted)
-    msg = f"Interrupted {interrupted} process(es)." if interrupted else "No active processes."
+    msg = f"**Interrupt** — {interrupted} process(es) interrupted." if interrupted else "**Interrupt** — nothing running."
     await send_rich(
         bot,
         chat_id,
@@ -98,9 +98,9 @@ async def handle_abort_all(
 
     logger.info("Abort ALL requested killed=%d", killed)
     if killed:
-        text = f"Stopped {killed} process(es) across all agents."
+        text = f"**Stop All** — {killed} process(es) stopped across all agents."
     else:
-        text = "No active processes found on any agent."
+        text = "**Stop All** — nothing running."
     await send_rich(
         bot,
         chat_id,
