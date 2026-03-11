@@ -11,6 +11,7 @@ import contextlib
 import logging
 from collections import deque
 from collections.abc import Awaitable, Callable
+from dataclasses import dataclass, field
 from pathlib import Path
 from typing import TYPE_CHECKING
 
@@ -72,6 +73,21 @@ class MatrixNotificationService:
             self._bot._track_sent_event(event_id)
 
 
+# Seconds to wait for a follow-up text message after a caption-less media upload.
+_MEDIA_BUFFER_TIMEOUT = 300  # 5 minutes
+
+
+@dataclass
+class PendingMedia:
+    """A media upload waiting for a follow-up text message."""
+
+    prompt: str
+    room_id: str
+    event: object
+    chat_id: int
+    timeout_handle: asyncio.TimerHandle | None = field(default=None, repr=False)
+
+
 class MatrixBot:
     """Matrix transport bot implementing BotProtocol."""
 
@@ -123,6 +139,10 @@ class MatrixBot:
 
         # Last room that sent a message (fallback for delivery when allowed_rooms is empty)
         self._last_active_room: str | None = None
+
+        # Buffer for caption-less media uploads, keyed by room_id.
+        # Media waits here until a follow-up text message arrives or the timeout fires.
+        self._pending_media: dict[str, PendingMedia] = {}
 
     # --- BotProtocol implementation ---
 
@@ -277,6 +297,15 @@ class MatrixBot:
             await self._handle_command(text, room_id, chat_id, event)
             return
 
+        # If there is a buffered media upload for this room, combine it with
+        # this text message so the agent gets both the file and the context.
+        pending = self._pending_media.pop(room_id, None)
+        if pending:
+            if pending.timeout_handle:
+                pending.timeout_handle.cancel()
+            text = f"{pending.prompt}\nUser message: {text}"
+            logger.info("Combined buffered media with text for room %s", room_id[:8])
+
         key = SessionKey(chat_id=chat_id, topic_id=None)
         asyncio.create_task(
             self._dispatch_with_lock(key, text, room_id, event),
@@ -328,6 +357,35 @@ class MatrixBot:
         )
 
         if not text:
+            return
+
+        # If the media has no caption (typical for Element uploads), buffer it
+        # and wait for a follow-up text message that provides context.
+        has_caption = False
+        # The prompt contains "User message:" only when a caption was present.
+        if "User message:" in text:
+            has_caption = True
+
+        if not has_caption:
+            # Cancel any previous pending media for this room (replace it).
+            prev = self._pending_media.pop(room_id, None)
+            if prev and prev.timeout_handle:
+                prev.timeout_handle.cancel()
+
+            pending = PendingMedia(
+                prompt=text,
+                room_id=room_id,
+                event=event,
+                chat_id=chat_id,
+            )
+
+            def _schedule_flush(rid: str = room_id) -> None:
+                asyncio.create_task(self._flush_pending_media(rid))
+
+            loop = asyncio.get_running_loop()
+            pending.timeout_handle = loop.call_later(_MEDIA_BUFFER_TIMEOUT, _schedule_flush)
+            self._pending_media[room_id] = pending
+            logger.info("Buffered media for room %s, waiting for follow-up text", room_id[:8])
             return
 
         key = SessionKey(chat_id=chat_id, topic_id=None)
@@ -526,6 +584,15 @@ class MatrixBot:
         result = await orch.handle_message(key, text)
         if result and result.text:
             await self._send_selector_response(room_id, result.text, result.buttons)
+
+    async def _flush_pending_media(self, room_id: str) -> None:
+        """Timeout handler: dispatch buffered media without follow-up text."""
+        pending = self._pending_media.pop(room_id, None)
+        if not pending:
+            return
+        logger.info("Media buffer timeout for room %s, dispatching without text", room_id[:8])
+        key = SessionKey(chat_id=pending.chat_id, topic_id=None)
+        await self._dispatch_with_lock(key, pending.prompt, pending.room_id, pending.event)
 
     async def _dispatch_with_lock(
         self, key: SessionKey, text: str, room_id: str, event: object
