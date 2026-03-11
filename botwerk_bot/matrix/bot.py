@@ -891,6 +891,10 @@ class MatrixBot:
         key = SessionKey(chat_id=chat_id, topic_id=None)
         resp = None
 
+        if callback_data.startswith("upg:"):
+            await self._handle_upgrade_callback(room_id, callback_data)
+            return
+
         if is_model_selector_callback(callback_data):
             resp = await handle_model_callback(orch, key, callback_data)
         elif is_cron_selector_callback(callback_data):
@@ -908,6 +912,67 @@ class MatrixBot:
 
         if resp:
             await self._send_selector_response(room_id, resp.text, resp.buttons)
+
+    # --- Upgrade callback ---
+
+    async def _handle_upgrade_callback(self, room_id: str, callback_data: str) -> None:
+        """Handle ``upg:yes:<version>``, ``upg:no``, and ``upg:cl:<version>`` callbacks."""
+        from botwerk_bot.infra.restart import EXIT_RESTART
+        from botwerk_bot.infra.updater import (
+            perform_upgrade_pipeline,
+            write_upgrade_sentinel,
+        )
+        from botwerk_bot.infra.version import fetch_changelog, get_current_version
+
+        if callback_data == "upg:no":
+            await self._send_rich(room_id, "Upgrade skipped.")
+            return
+
+        if callback_data.startswith("upg:cl:"):
+            version = callback_data.split(":", 2)[2]
+            body = await fetch_changelog(version)
+            if body:
+                await self._send_rich(room_id, f"**Changelog v{version}**\n\n{body}")
+            else:
+                await self._send_rich(room_id, f"No changelog found for v{version}.")
+            return
+
+        if callback_data.startswith("upg:yes:"):
+            target_version = callback_data.split(":", 2)[2]
+            current_version = get_current_version()
+
+            await self._send_rich(room_id, f"Upgrading to {target_version}...")
+
+            changed, installed_version, output = await perform_upgrade_pipeline(
+                current_version=current_version,
+                target_version=target_version,
+            )
+
+            if not changed:
+                tail = output[-300:] if output else ""
+                details = f"\n\n{tail}" if tail else ""
+                await self._send_rich(
+                    room_id,
+                    f"Upgrade could not verify a new installed version "
+                    f"(still {installed_version}) after automatic retry.{details}",
+                )
+                return
+
+            orch = self._orchestrator
+            if orch:
+                chat_id = self._id_map.room_to_int(room_id)
+                await asyncio.to_thread(
+                    write_upgrade_sentinel,
+                    orch.paths.botwerk_home,
+                    chat_id=chat_id,
+                    old_version=current_version,
+                    new_version=installed_version,
+                )
+
+            await self._send_rich(room_id, "**Restarting** — upgrade complete, restarting...")
+            self._exit_code = EXIT_RESTART
+            if self._sync_task and not self._sync_task.done():
+                self._sync_task.cancel()
 
     # --- Join notification ---
 
