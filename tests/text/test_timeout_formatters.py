@@ -42,7 +42,7 @@ class TestTimeoutResultText:
 class TestStartupNotificationText:
     def test_first_start(self) -> None:
         result = startup_notification_text("first_start")
-        assert "First start" in result
+        assert "Bot Started" in result
 
     def test_system_reboot(self) -> None:
         result = startup_notification_text("system_reboot")

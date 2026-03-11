@@ -54,7 +54,8 @@ async def test_new_command_resets_only_active_provider_bucket(orch: Orchestrator
     await orch._sessions.update_session(codex)
 
     result = await orch.handle_message(key, "/new")
-    assert "Session reset for Codex" in result.text
+    assert "Codex" in result.text
+    assert "Session Reset" in result.text
 
     active = await orch._sessions.get_active(key)
     assert active is not None

@@ -38,7 +38,11 @@ async def handle_interrupt(
 
     interrupted = orchestrator.interrupt(chat_id)
     logger.info("Interrupt requested interrupted=%d", interrupted)
-    msg = f"**Interrupt** — {interrupted} process(es) interrupted." if interrupted else "**Interrupt** — nothing running."
+    msg = (
+        f"**Interrupt** — {interrupted} process(es) interrupted."
+        if interrupted
+        else "**Interrupt** — nothing running."
+    )
     await send_rich(
         bot,
         chat_id,

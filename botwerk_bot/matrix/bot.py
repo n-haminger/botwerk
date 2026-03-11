@@ -407,7 +407,11 @@ class MatrixBot:
         orch = self._orchestrator
         if orch:
             interrupted = orch.interrupt(key.chat_id)
-            msg = f"**Interrupt** — {interrupted} process(es) interrupted." if interrupted else "**Interrupt** — nothing running."
+            msg = (
+                f"**Interrupt** — {interrupted} process(es) interrupted."
+                if interrupted
+                else "**Interrupt** — nothing running."
+            )
             await self._send_rich(room_id, msg)
 
     async def _cmd_stop_all(
@@ -419,7 +423,11 @@ class MatrixBot:
             killed = await orch.abort(key.chat_id)
         if self._abort_all_callback:
             killed += await self._abort_all_callback()
-        msg = f"**Stop All** — {killed} process(es) stopped across all agents." if killed else "**Stop All** — nothing running."
+        msg = (
+            f"**Stop All** — {killed} process(es) stopped across all agents."
+            if killed
+            else "**Stop All** — nothing running."
+        )
         await self._send_rich(room_id, msg)
 
     async def _cmd_restart(

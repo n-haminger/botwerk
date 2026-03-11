@@ -13,7 +13,7 @@ class TestStartupNotification:
     def test_first_start_produces_message(self) -> None:
         text = startup_notification_text(StartupKind.FIRST_START.value)
         assert text
-        assert "First start" in text
+        assert "Bot Started" in text
 
     def test_reboot_produces_message(self) -> None:
         text = startup_notification_text(StartupKind.SYSTEM_REBOOT.value)
