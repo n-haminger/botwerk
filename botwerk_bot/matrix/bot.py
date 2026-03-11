@@ -90,7 +90,10 @@ class MatrixBot:
         self._store_path = Path(config.botwerk_home).expanduser() / mx.store_path
         self._store_path.mkdir(parents=True, exist_ok=True)
 
-        self._client = AsyncClient(mx.homeserver, mx.user_id)
+        from nio import AsyncClientConfig
+
+        nio_config = AsyncClientConfig(max_limit_exceeded=3, max_timeouts=2)
+        self._client = AsyncClient(mx.homeserver, mx.user_id, config=nio_config)
         self._id_map = MatrixIdMap(self._store_path)
         self._button_tracker = ButtonTracker()
         self._lock_pool = LockPool()
@@ -624,6 +627,7 @@ class MatrixBot:
 
         buffer = [""]
         segment_count = [0]
+        typing_ctx: MatrixTypingContext | None = None
 
         async def _on_delta(delta: str) -> None:
             buffer[0] += delta
@@ -639,9 +643,10 @@ class MatrixBot:
             if seg_text:
                 await self._send_rich(room_id, buffer[0])
             buffer[0] = ""
-            # Re-set typing indicator (sending messages clears it in Matrix)
-            with contextlib.suppress(Exception):
-                await self._client.room_typing(room_id, typing_state=True, timeout=30000)
+            # Re-send typing inline and reset keep-alive timer (sending
+            # messages clears the indicator on the server).
+            if typing_ctx is not None:
+                await typing_ctx.notify()
 
         async def _on_tool(tool_name: str) -> None:
             segment_count[0] += 1
@@ -666,7 +671,7 @@ class MatrixBot:
                 return
             await _flush_and_tag(f"*[{label}]*")
 
-        async with MatrixTypingContext(self._client, room_id):
+        async with MatrixTypingContext(self._client, room_id) as typing_ctx:
             result = await orch.handle_message_streaming(
                 key,
                 text,
