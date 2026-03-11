@@ -27,7 +27,24 @@ class TestTransportRegistry:
     def test_matrix_transport(self) -> None:
         config = MagicMock()
         config.transport = "matrix"
+        config.matrix = MagicMock()
+        config.matrix.homeserver = "https://matrix.example.com"
         fake_bot = MagicMock()
         with patch("botwerk_bot.matrix.bot.MatrixBot", return_value=fake_bot):
             bot = create_bot(config, agent_name="test")
         assert bot is fake_bot
+
+    def test_matrix_transport_no_homeserver_raises(self) -> None:
+        config = MagicMock()
+        config.transport = "matrix"
+        config.matrix = MagicMock()
+        config.matrix.homeserver = ""
+        with pytest.raises(ValueError, match="no homeserver configured"):
+            create_bot(config, agent_name="test")
+
+    def test_matrix_transport_no_matrix_config_raises(self) -> None:
+        config = MagicMock()
+        config.transport = "matrix"
+        config.matrix = None
+        with pytest.raises(ValueError, match="no homeserver configured"):
+            create_bot(config, agent_name="test")

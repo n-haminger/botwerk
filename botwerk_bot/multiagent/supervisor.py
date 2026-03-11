@@ -442,15 +442,20 @@ class AgentSupervisor:
             return
 
         # Workspace init creates config.json from config.example (main defaults).
-        # Overwrite model/provider/effort so the on-disk config matches agents.json.
+        # Overwrite model/provider/effort/transport so the on-disk config matches
+        # agents.json.  Without transport + matrix credentials the agent would
+        # start with the template default ("telegram") and crash on restart.
         config_path = agent_home / "config" / "config.json"
         if config_path.exists():
-            await update_config_file_async(
-                config_path,
-                provider=config.provider,
-                model=config.model,
-                reasoning_effort=config.reasoning_effort,
-            )
+            updates: dict[str, object] = {
+                "provider": config.provider,
+                "model": config.model,
+                "reasoning_effort": config.reasoning_effort,
+                "transport": config.transport,
+            }
+            if config.transport == "matrix" and config.matrix:
+                updates["matrix"] = config.matrix.model_dump()
+            await update_config_file_async(config_path, **updates)
 
         # Grant the isolated agent user ACL-based access to the workspace.
         # The botwerk service user retains ownership so the supervisor can

@@ -299,6 +299,47 @@ class TestStartSubAgent:
 
         assert "sub1" not in supervisor._stacks
 
+    async def test_persists_transport_and_matrix_to_config(
+        self, supervisor: AgentSupervisor, tmp_path: Path
+    ) -> None:
+        """On-disk config.json must receive transport + matrix credentials."""
+        from botwerk_bot.multiagent.models import MatrixConfig
+
+        matrix_cfg = MatrixConfig(
+            homeserver="https://matrix.example.com",
+            user_id="@bot:example.com",
+            password="secret",
+            allowed_rooms=["!room:example.com"],
+            allowed_users=["@user:example.com"],
+        )
+        sub_cfg = SubAgentConfig(
+            name="mx1",
+            transport="matrix",
+            matrix=matrix_cfg,
+        )
+
+        agent_home = tmp_path / "agents" / "mx1"
+        config_dir = agent_home / "config"
+        config_dir.mkdir(parents=True)
+        config_path = config_dir / "config.json"
+        config_path.write_text(json.dumps({"transport": "telegram", "matrix": {}}))
+
+        mock_stack = MagicMock()
+        mock_stack.bot = MagicMock()
+        mock_stack.bot.on_async_interagent_result = AsyncMock()
+
+        with patch(
+            "botwerk_bot.multiagent.supervisor.AgentStack.create",
+            new_callable=AsyncMock,
+            return_value=mock_stack,
+        ):
+            await supervisor._start_sub_agent(sub_cfg)
+
+        saved = json.loads(config_path.read_text())
+        assert saved["transport"] == "matrix"
+        assert saved["matrix"]["homeserver"] == "https://matrix.example.com"
+        assert saved["matrix"]["user_id"] == "@bot:example.com"
+
 
 class TestStopAll:
     """Test stop_all() ordered shutdown."""

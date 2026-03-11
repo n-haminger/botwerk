@@ -36,6 +36,12 @@ def _create_telegram(config: AgentConfig, *, agent_name: str) -> BotProtocol:
 def _create_matrix(config: AgentConfig, *, agent_name: str) -> BotProtocol:
     from botwerk_bot.matrix.bot import MatrixBot
 
+    if not config.matrix or not config.matrix.homeserver:
+        msg = (
+            f"Matrix transport selected for agent {agent_name!r} but no "
+            f"homeserver configured. Check agents.json matrix section."
+        )
+        raise ValueError(msg)
     return MatrixBot(config, agent_name=agent_name)
 
 
