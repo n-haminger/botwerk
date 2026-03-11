@@ -61,9 +61,7 @@ class MatrixTypingContext:
             logger.info("room_typing(%s) ok for %s", source, self._room_id)
             return True
         except Exception:
-            logger.warning(
-                "room_typing(%s) failed for %s", source, self._room_id, exc_info=True
-            )
+            logger.warning("room_typing(%s) failed for %s", source, self._room_id, exc_info=True)
             return False
 
     async def _keep_alive(self) -> None:
