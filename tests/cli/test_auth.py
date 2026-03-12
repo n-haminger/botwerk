@@ -405,6 +405,8 @@ def test_check_gemini_auth_botwerk_config_key(
     botwerk_config.parent.mkdir(parents=True)
     botwerk_config.write_text('{"gemini_api_key":"from-botwerk-config"}')
 
+    monkeypatch.setattr(_auth_mod, "_botwerk_config_path", lambda: botwerk_config)
+
     result = check_gemini_auth()
 
     assert result.status == AuthStatus.AUTHENTICATED

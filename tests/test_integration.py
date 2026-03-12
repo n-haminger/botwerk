@@ -355,25 +355,13 @@ class TestDirectiveParsing:
 
 
 class TestHookApplication:
-    async def test_mainmemory_hook_fires_on_6th_message(
+    async def test_no_mainmemory_reminder_in_prompts(
         self, orch_with_mock_cli: tuple[Orchestrator, AsyncMock]
     ) -> None:
+        """MAINMEMORY_REMINDER was replaced by MemoryObserver -- verify it no longer fires."""
         orch, mock_execute = orch_with_mock_cli
 
         for i in range(6):
-            mock_execute.return_value = _make_agent_response(result=f"Reply {i}")
-            await orch.handle_message(KEY, f"Message {i}")
-
-        sixth_call = mock_execute.call_args_list[5]
-        prompt = sixth_call[0][0].prompt
-        assert "MEMORY CHECK" in prompt
-
-    async def test_hook_does_not_fire_before_threshold(
-        self, orch_with_mock_cli: tuple[Orchestrator, AsyncMock]
-    ) -> None:
-        orch, mock_execute = orch_with_mock_cli
-
-        for i in range(5):
             mock_execute.return_value = _make_agent_response(result=f"Reply {i}")
             await orch.handle_message(KEY, f"Message {i}")
 

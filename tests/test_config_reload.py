@@ -111,6 +111,9 @@ class TestConfigReloader:
         # Mutate the file
         self._write_config(config_path, model="opus")
 
+        # Ensure mtime change is detected (filesystem may have 1s granularity)
+        reloader._last_mtime -= 2.0
+
         await reloader._check()
         on_hot.assert_called_once()
         call_config, call_hot = on_hot.call_args[0]
@@ -127,6 +130,9 @@ class TestConfigReloader:
         new_data = cfg.model_dump(mode="json")
         new_data["telegram_token"] = "new-token-value"
         config_path.write_text(json.dumps(new_data), encoding="utf-8")
+
+        # Ensure mtime change is detected (filesystem may have 1s granularity)
+        reloader._last_mtime -= 2.0
 
         await reloader._check()
         on_restart.assert_called_once()
@@ -200,6 +206,8 @@ class TestConfigReloader:
         reloader = ConfigReloader(config_path, cfg, on_hot_reload=capture)
 
         self._write_config(config_path, model="opus")
+        # Ensure mtime change is detected (filesystem may have 1s granularity)
+        reloader._last_mtime -= 2.0
         await reloader._check()
 
         assert cfg.model == "opus"

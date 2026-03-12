@@ -144,10 +144,12 @@ def from_interagent_result(result: AsyncInterAgentResult, chat_id: int) -> Envel
             metadata=meta,
         )
 
+    prompt = _build_interagent_injection_prompt(result)
     return Envelope(
         origin=Origin.INTERAGENT,
         chat_id=delivery_chat_id,
         topic_id=result.topic_id,
+        prompt=prompt,
         prompt_preview=result.message_preview,
         result_text=result.result_text,
         status="success",
@@ -157,6 +159,35 @@ def from_interagent_result(result: AsyncInterAgentResult, chat_id: int) -> Envel
         elapsed_seconds=result.elapsed_seconds,
         session_name=result.session_name,
         metadata=meta,
+    )
+
+
+def _build_interagent_injection_prompt(result: AsyncInterAgentResult) -> str:
+    """Build the prompt injected into the sender agent's active session."""
+    recipient = result.recipient
+    task_id = result.task_id
+
+    session_hint = (
+        f"\nThe recipient processed this in session `{result.session_name}`. "
+        f"The user can continue this session in the recipient's chat "
+        f"via `@{result.session_name} <message>`."
+        if result.session_name
+        else ""
+    )
+
+    task_context = (
+        f"\n\nOriginal task you sent to '{recipient}':\n{result.original_message}"
+        if result.original_message
+        else ""
+    )
+
+    return (
+        f"[ASYNC INTER-AGENT RESPONSE from '{recipient}' (task {task_id})]\n"
+        f"Duration: {result.elapsed_seconds:.0f}s\n\n"
+        f"{result.result_text}\n"
+        f"[END ASYNC INTER-AGENT RESPONSE]{session_hint}{task_context}\n\n"
+        f"Process this response from agent '{recipient}' and communicate "
+        f"the relevant results to the user."
     )
 
 

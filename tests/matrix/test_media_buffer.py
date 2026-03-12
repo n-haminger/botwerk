@@ -2,13 +2,11 @@
 
 from __future__ import annotations
 
-import asyncio
-from unittest.mock import AsyncMock, MagicMock, patch
+from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
-from botwerk_bot.matrix.bot import PendingMedia, _MEDIA_BUFFER_TIMEOUT
-
+from botwerk_bot.matrix.bot import _MEDIA_BUFFER_TIMEOUT, PendingMedia
 
 # ---------------------------------------------------------------------------
 # PendingMedia dataclass
@@ -40,7 +38,7 @@ class TestPendingMedia:
 class TestOnMediaBuffering:
     """Test that _on_media buffers caption-less media instead of dispatching."""
 
-    @pytest.fixture()
+    @pytest.fixture
     def bot_stub(self) -> MagicMock:
         """Minimal MatrixBot-like stub with required attributes."""
         bot = MagicMock()

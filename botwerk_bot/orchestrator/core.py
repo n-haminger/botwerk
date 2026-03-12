@@ -49,7 +49,6 @@ from botwerk_bot.orchestrator.flows import (
 from botwerk_bot.orchestrator.hooks import (
     DELEGATION_BRIEF,
     DELEGATION_REMINDER,
-    MAINMEMORY_REMINDER,
     MessageHookRegistry,
 )
 from botwerk_bot.orchestrator.observers import ObserverManager
@@ -164,9 +163,10 @@ class Orchestrator:
         self._api_stop: Callable[[], Awaitable[None]] | None = None
         self._inflight_tracker = InflightTracker(paths.inflight_turns_path)
         self._hook_registry = MessageHookRegistry()
-        self._hook_registry.register(MAINMEMORY_REMINDER)
         self._hook_registry.register(DELEGATION_BRIEF)
         self._hook_registry.register(DELEGATION_REMINDER)
+        # Memory observer replaces the old MAINMEMORY_REMINDER hook.
+        self._memory_observer = self._observers.init_memory_observer(self._cli_service)
         self._supervisor: AgentSupervisor | None = None  # Set by AgentSupervisor after creation
         self._task_hub: TaskHub | None = None  # Set by supervisor or __main__.py
         self._command_registry = CommandRegistry()

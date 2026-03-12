@@ -22,11 +22,12 @@ from botwerk_bot.cli.codex_cache import CodexModelCache
 from botwerk_bot.cli.codex_cache_observer import CodexCacheObserver
 from botwerk_bot.cli.gemini_cache_observer import GeminiCacheObserver
 from botwerk_bot.cli.service import CLIService
-from botwerk_bot.config import AgentConfig, get_gemini_models
+from botwerk_bot.config import AgentConfig, MemoryConfig, get_gemini_models
 from botwerk_bot.config_reload import ConfigReloader
 from botwerk_bot.cron.manager import CronManager
 from botwerk_bot.cron.observer import CronObserver
 from botwerk_bot.heartbeat import HeartbeatObserver
+from botwerk_bot.memory.observer import MemoryObserver
 from botwerk_bot.webhook.manager import WebhookManager
 from botwerk_bot.webhook.models import WebhookResult
 from botwerk_bot.webhook.observer import WebhookObserver
@@ -52,6 +53,8 @@ class ObserverManager:
         self.codex_cache: CodexModelCache | None = None
         self.codex_cache_obs: CodexCacheObserver | None = None
         self.gemini_cache_obs: GeminiCacheObserver | None = None
+
+        self.memory: MemoryObserver | None = None
 
         self._config_reloader: ConfigReloader | None = None
         self._rule_sync_task: asyncio.Task[None] | None = None
@@ -107,6 +110,33 @@ class ObserverManager:
             paths, webhook_manager, config=config, codex_cache=codex_cache
         )
 
+    # -- Memory observer initialization ----------------------------------------
+
+    def init_memory_observer(self, cli_service: CLIService) -> MemoryObserver | None:
+        """Create the MemoryObserver if enabled in config."""
+        mem_cfg: MemoryConfig = self._config.memory
+        if not mem_cfg.enabled:
+            logger.info("Memory observer disabled")
+            return None
+
+        shared_path = self._paths.botwerk_home / "SHAREDMEMORY.md"
+        self.memory = MemoryObserver(
+            mainmemory_path=self._paths.mainmemory_path,
+            shared_memory_path=shared_path,
+            cli_service=cli_service,
+            triage_model=mem_cfg.triage_model,
+            triage_provider=mem_cfg.triage_provider,
+            write_model=mem_cfg.write_model,
+            write_provider=mem_cfg.write_provider,
+            message_weight=mem_cfg.message_weight,
+            char_weight=mem_cfg.char_weight,
+            idle_check_seconds=mem_cfg.idle_check_seconds,
+            compact_threshold=mem_cfg.compact_threshold,
+            check_on_compaction=mem_cfg.check_on_compaction,
+            check_on_session_end=mem_cfg.check_on_session_end,
+        )
+        return self.memory
+
     # -- Start / stop ---------------------------------------------------------
 
     async def start_all(self, *, docker_container: str = "") -> None:
@@ -117,6 +147,9 @@ class ObserverManager:
         if self.webhook:
             await self.webhook.start()
         await self.cleanup.start()
+        if self.memory:
+            await self.memory.start()
+            logger.info("Memory observer started")
 
         self._rule_sync_task = asyncio.create_task(watch_rule_files(self._paths.workspace))
         logger.info("Rule file watcher started (CLAUDE.md <-> AGENTS.md <-> GEMINI.md)")
@@ -153,6 +186,8 @@ class ObserverManager:
         if self.cron:
             await self.cron.stop()
         await self.cleanup.stop()
+        if self.memory:
+            await self.memory.stop()
         if self.codex_cache_obs:
             await self.codex_cache_obs.stop()
             self.codex_cache_obs = None

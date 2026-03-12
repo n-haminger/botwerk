@@ -137,6 +137,22 @@ class MatrixConfig(BaseModel):
     store_path: str = "matrix_store"  # relative to botwerk_home
 
 
+class MemoryConfig(BaseModel):
+    """Settings for the autonomous memory observer."""
+
+    enabled: bool = True
+    triage_provider: str = "claude"
+    triage_model: str = "haiku"
+    write_provider: str = "claude"
+    write_model: str = "sonnet"
+    message_weight: int = 5
+    char_weight: int = 3000
+    check_on_compaction: bool = True
+    check_on_session_end: bool = True
+    idle_check_seconds: int = 300
+    compact_threshold: int = 200
+
+
 class TasksConfig(BaseModel):
     """Settings for background task delegation."""
 
@@ -260,6 +276,7 @@ class AgentConfig(BaseModel):
     cli_parameters: CLIParametersConfig = Field(default_factory=CLIParametersConfig)
     timeouts: TimeoutConfig = Field(default_factory=TimeoutConfig)
     tasks: TasksConfig = Field(default_factory=TasksConfig)
+    memory: MemoryConfig = Field(default_factory=MemoryConfig)
     user_timezone: str = ""
     group_mention_only: bool = False
     interagent_port: int = 8799

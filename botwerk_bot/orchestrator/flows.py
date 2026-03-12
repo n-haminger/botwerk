@@ -89,11 +89,18 @@ async def _prepare_normal(
         session.message_count,
     )
 
+    # Inject MAINMEMORY on new sessions and periodically on resumed sessions
+    # so the agent always has fresh memory context (especially after compaction).
+    _inject_memory = is_new or session.message_count % 5 == 0
     append_prompt = None
-    if is_new:
+    if _inject_memory:
         mainmemory = await asyncio.to_thread(read_mainmemory, orch.paths)
-        if mainmemory.strip():
-            append_prompt = mainmemory
+        append_prompt = mainmemory.strip() or None
+
+    if is_new:
+        # Notify memory observer to sweep the old session before resetting.
+        if orch._memory_observer is not None:
+            orch._memory_observer.notify_session_end(key.chat_id)
 
         roster = _build_agent_roster(orch)
         if roster:
@@ -321,6 +328,12 @@ async def _gemini_missing_config_key_warning(
     )
 
 
+def _feed_memory_log(orch: Orchestrator, chat_id: int, role: str, text: str) -> None:
+    """Append a turn to the memory observer's conversation log (if active)."""
+    if orch._memory_observer is not None and text:
+        orch._memory_observer.get_log(chat_id).append(role, text)
+
+
 async def normal(
     orch: Orchestrator,
     key: SessionKey,
@@ -331,6 +344,7 @@ async def normal(
 ) -> OrchestratorResult:
     """Handle normal conversation with session resume."""
     logger.info("Normal flow starting")
+    _feed_memory_log(orch, key.chat_id, "user", text)
     request, session = await _prepare_normal(orch, key, text, model_override=model_override)
     warning = await _gemini_missing_config_key_warning(orch, request)
     if warning is not None:
@@ -373,6 +387,7 @@ async def normal(
                 cli_detail=response.result,
             )
         await _update_session(orch, session, response)
+        _feed_memory_log(orch, key.chat_id, "assistant", response.result)
         logger.info("Normal flow completed")
         result = _finish_normal(response, session, orch._config.session_age_warning_hours)
         if session_recovered:
@@ -392,6 +407,7 @@ async def normal_streaming(
 ) -> OrchestratorResult:
     """Handle normal conversation with streaming output."""
     logger.info("Streaming flow starting")
+    _feed_memory_log(orch, key.chat_id, "user", text)
     request, session = await _prepare_normal(orch, key, text, model_override=model_override)
     warning = await _gemini_missing_config_key_warning(orch, request)
     if warning is not None:
@@ -401,11 +417,20 @@ async def normal_streaming(
     _begin_inflight(orch, request, session, is_recovery=False)
     try:
         cb = cbs or StreamingCallbacks()
+        # Wire compaction events to the memory observer.
+        _mem_obs = orch._memory_observer
+
+        def _on_compact(pre_tokens: int) -> None:
+            if _mem_obs is not None:
+                _mem_obs.get_log(key.chat_id).mark_compaction(pre_tokens)
+                _mem_obs.trigger_compaction_check(key.chat_id)
+
         response = await orch._cli_service.execute_streaming(
             request,
             on_text_delta=cb.on_text_delta,
             on_tool_activity=cb.on_tool_activity,
             on_system_status=cb.on_system_status,
+            on_compaction=_on_compact,
         )
         _reg = orch._process_registry
         if (
@@ -440,6 +465,7 @@ async def normal_streaming(
                 cli_detail=response.result,
             )
         await _update_session(orch, session, response)
+        _feed_memory_log(orch, key.chat_id, "assistant", response.result)
         logger.info("Streaming flow completed")
         return _finish_normal(response, session, orch._config.session_age_warning_hours)
     finally:

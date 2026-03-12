@@ -2,21 +2,12 @@
 
 from __future__ import annotations
 
-from unittest.mock import AsyncMock
-
-import pytest
-
-from botwerk_bot.cli.types import AgentResponse
-from botwerk_bot.orchestrator.core import Orchestrator
-from botwerk_bot.orchestrator.flows import normal
 from botwerk_bot.orchestrator.hooks import (
-    MAINMEMORY_REMINDER,
     HookContext,
     MessageHook,
     MessageHookRegistry,
     every_n_messages,
 )
-from botwerk_bot.session.key import SessionKey
 
 # ---------------------------------------------------------------------------
 # Unit tests: HookContext, conditions, registry
@@ -101,86 +92,6 @@ class TestMessageHookRegistry:
         assert "NO" not in result
 
 
-class TestMainmemoryReminder:
-    def test_fires_on_6th(self) -> None:
-        assert MAINMEMORY_REMINDER.condition(_ctx(message_count=5)) is True
-
-    def test_does_not_fire_on_5th(self) -> None:
-        assert MAINMEMORY_REMINDER.condition(_ctx(message_count=4)) is False
-
-    def test_suffix_contains_key_phrases(self) -> None:
-        assert "MAINMEMORY.md" in MAINMEMORY_REMINDER.suffix
-        assert "MEMORY CHECK" in MAINMEMORY_REMINDER.suffix
-
-
-# ---------------------------------------------------------------------------
-# Integration: hook fires through the full flow
-# ---------------------------------------------------------------------------
-
-
-def _mock_response(**kwargs: object) -> AgentResponse:
-    defaults: dict[str, object] = {
-        "result": "OK",
-        "session_id": "sess-123",
-        "is_error": False,
-        "cost_usd": 0.01,
-        "total_tokens": 100,
-    }
-    defaults.update(kwargs)
-    return AgentResponse(**defaults)  # type: ignore[arg-type]
-
-
-@pytest.fixture
-def orch(orch: Orchestrator) -> Orchestrator:
-    return orch
-
-
-async def test_hook_injects_into_prompt_on_6th_message(orch: Orchestrator) -> None:
-    """After 5 successful messages, the 6th should carry the reminder."""
-    resp = _mock_response()
-    mock_execute = AsyncMock(return_value=resp)
-    object.__setattr__(orch._cli_service, "execute", mock_execute)
-
-    # Send 5 messages to build up the counter
-    for _ in range(5):
-        await normal(orch, SessionKey(chat_id=1), "msg")
-
-    # 6th message should have the hook injected
-    await normal(orch, SessionKey(chat_id=1), "sixth")
-
-    sixth_call = mock_execute.call_args_list[5]
-    request = sixth_call[0][0]
-    assert "MEMORY CHECK" in request.prompt
-    assert "memory_system/MAINMEMORY.md" in request.prompt
-
-
-async def test_hook_not_injected_before_6th(orch: Orchestrator) -> None:
-    """Messages 1-5 should not carry the mainmemory reminder."""
-    resp = _mock_response()
-    mock_execute = AsyncMock(return_value=resp)
-    object.__setattr__(orch._cli_service, "execute", mock_execute)
-
-    for i in range(5):
-        await normal(orch, SessionKey(chat_id=1), f"msg-{i}")
-        request = mock_execute.call_args_list[i][0][0]
-        assert "MEMORY CHECK" not in request.prompt
-
-
-async def test_hook_resets_on_new_session(orch: Orchestrator) -> None:
-    """After session reset, counter restarts -- 6th from reset triggers hook."""
-    resp = _mock_response()
-    mock_execute = AsyncMock(return_value=resp)
-    object.__setattr__(orch._cli_service, "execute", mock_execute)
-
-    # Send 5 messages
-    for _ in range(5):
-        await normal(orch, SessionKey(chat_id=1), "msg")
-
-    # Reset session (simulates /new)
-    await orch._sessions.reset_session(SessionKey(chat_id=1))
-
-    # Messages after reset should NOT carry the mainmemory reminder (counter back to 0)
-    # (DELEGATION_BRIEF fires on new session, but that's expected and correct)
-    await normal(orch, SessionKey(chat_id=1), "after-reset")
-    last_request = mock_execute.call_args[0][0]
-    assert "MEMORY CHECK" not in last_request.prompt
+# NOTE: TestMainmemoryReminder and integration tests removed.
+# The MAINMEMORY_REMINDER hook has been replaced by the autonomous
+# MemoryObserver (botwerk_bot.memory).  See tests/memory/ for coverage.

@@ -86,20 +86,6 @@ def _is_delegation_reminder_due(ctx: HookContext) -> bool:
 # Built-in hooks
 # ---------------------------------------------------------------------------
 
-MAINMEMORY_REMINDER = MessageHook(
-    name="mainmemory_reminder",
-    condition=every_n_messages(6),
-    suffix=(
-        "## MEMORY CHECK\n"
-        "Silently review: memory_system/MAINMEMORY.md, user_tools/, cron_tasks/.\n"
-        "Compare what you already know with this conversation so far.\n"
-        "If something important is missing from memory (personality, preferences, "
-        "decisions, facts) -- update MAINMEMORY.md silently.\n"
-        "If you notice a gap that only the user can fill, ask ONE natural follow-up "
-        "question that fits the current conversation. Do not interrogate."
-    ),
-)
-
 DELEGATION_BRIEF = MessageHook(
     name="delegation_brief",
     condition=on_new_session,

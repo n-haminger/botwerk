@@ -17,7 +17,8 @@ def test_create_cli_returns_claude_by_default() -> None:
 
 
 def test_create_cli_returns_codex() -> None:
-    cli = create_cli(CLIConfig(provider="codex"))
+    with patch.object(CodexCLI, "_find_cli", return_value="/usr/bin/codex"):
+        cli = create_cli(CLIConfig(provider="codex"))
     assert isinstance(cli, CodexCLI)
 
 

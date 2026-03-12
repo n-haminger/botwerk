@@ -13,7 +13,7 @@ import time
 from typing import TYPE_CHECKING
 
 from botwerk_bot.cli.types import AgentRequest
-from botwerk_bot.orchestrator.flows import _update_session
+from botwerk_bot.orchestrator.flows import _feed_memory_log, _update_session
 from botwerk_bot.session.key import SessionKey
 from botwerk_bot.session.named import NamedSession
 
@@ -58,6 +58,12 @@ async def _inject_prompt(
 
     if active and response:
         await _update_session(orch, active, response)
+
+    # Feed both prompt and response into the memory observer so that
+    # inter-agent results and task questions are captured for memory updates.
+    _feed_memory_log(orch, chat_id, "user", prompt)
+    if response:
+        _feed_memory_log(orch, chat_id, "assistant", response.result)
 
     return response.result if response else ""
 
@@ -179,6 +185,9 @@ async def handle_interagent_message(
         f"from '{sender}'. Be direct and concise."
     )
 
+    # Feed the raw message (without wrapper) into memory for cleaner triage.
+    _feed_memory_log(orch, chat_id, "user", message)
+
     ns.status = "running"
     request = AgentRequest(
         prompt=prompt,
@@ -199,13 +208,15 @@ async def handle_interagent_message(
             provider_switch_notice,
         )
     else:
+        result_text = response.result if response else ""
         if response and response.session_id:
             orch._named_sessions.update_after_response(
                 chat_id, ns.name, response.session_id, status="idle"
             )
         else:
             ns.status = "idle"
-        return (response.result if response else ""), ns.name, provider_switch_notice
+        _feed_memory_log(orch, chat_id, "assistant", result_text)
+        return result_text, ns.name, provider_switch_notice
 
 
 async def handle_async_interagent_result(
