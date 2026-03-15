@@ -389,6 +389,7 @@ class ApiServer:
         try:
             reader = await request.multipart()
         except (ValueError, AssertionError):
+            # aiohttp raises AssertionError for non-multipart content types.
             return web.json_response({"error": "multipart body required"}, status=400)
 
         saved: list[dict[str, Any]] = []
@@ -428,7 +429,7 @@ class ApiServer:
                         cumulative_bytes += len(chunk)
                         if cumulative_bytes > _MAX_UPLOAD_BYTES:
                             raise _UploadTooLarge
-                        f.write(chunk)
+                        await asyncio.to_thread(f.write, chunk)
             except _UploadTooLarge:
                 dest.unlink(missing_ok=True)
                 # Clean up already-saved files from this request.

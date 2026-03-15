@@ -269,3 +269,25 @@ class TestMultiFileUpload:
         body = await resp.json()
         for entry in body["files"]:
             assert Path(entry["path"]).is_file()
+
+    async def test_cumulative_size_limit_returns_413(self, api_client) -> None:
+        """Exceeding the cumulative upload limit returns 413 and cleans up files."""
+        from botwerk_bot.api import server as _srv
+
+        original = _srv._MAX_UPLOAD_BYTES
+        _srv._MAX_UPLOAD_BYTES = 100  # tiny limit for testing
+        try:
+            data = FormData()
+            data.add_field("file", b"A" * 60, filename="a.bin")
+            data.add_field("file", b"B" * 60, filename="b.bin")
+
+            resp = await api_client.post(
+                "/upload/multi",
+                data=data,
+                headers={"Authorization": "Bearer test-token"},
+            )
+            assert resp.status == 413
+            body = await resp.json()
+            assert "limit" in body["error"]
+        finally:
+            _srv._MAX_UPLOAD_BYTES = original
