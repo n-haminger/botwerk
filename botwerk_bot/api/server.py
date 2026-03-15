@@ -66,7 +66,7 @@ logger = logging.getLogger(__name__)
 StreamingMessageHandler = Callable[..., Awaitable[Any]]
 AbortHandler = Callable[[int], Awaitable[int]]
 
-_MAX_UPLOAD_BYTES = 50 * 1024 * 1024  # 50 MB
+_DEFAULT_MAX_UPLOAD_MB = 100
 
 
 class _UploadTooLarge(Exception):
@@ -183,6 +183,7 @@ class ApiServer:
     ) -> None:
         self._config = config
         self._default_chat_id = default_chat_id
+        self._max_upload_bytes = getattr(config, "max_upload_mb", _DEFAULT_MAX_UPLOAD_MB) * 1024 * 1024
         self._handle_message: StreamingMessageHandler | None = None
         self._handle_abort: AbortHandler | None = None
         self._runner: web.AppRunner | None = None
@@ -239,7 +240,7 @@ class ApiServer:
                 self._config.port,
             )
 
-        app = web.Application(client_max_size=_MAX_UPLOAD_BYTES)
+        app = web.Application(client_max_size=self._max_upload_bytes)
         app.router.add_get("/health", self._handle_health)
         app.router.add_get("/ws", self._handle_websocket)
         app.router.add_get("/files", self._handle_file_download)
@@ -336,10 +337,10 @@ class ApiServer:
                 if not chunk:
                     break
                 total += len(chunk)
-                if total > _MAX_UPLOAD_BYTES:
+                if total > self._max_upload_bytes:
                     dest.unlink(missing_ok=True)
                     return web.json_response(
-                        {"error": f"file exceeds {_MAX_UPLOAD_BYTES // (1024 * 1024)} MB limit"},
+                        {"error": f"file exceeds {self._max_upload_bytes // (1024 * 1024)} MB limit"},
                         status=413,
                     )
                 f.write(chunk)
@@ -427,7 +428,7 @@ class ApiServer:
                             break
                         file_bytes += len(chunk)
                         cumulative_bytes += len(chunk)
-                        if cumulative_bytes > _MAX_UPLOAD_BYTES:
+                        if cumulative_bytes > self._max_upload_bytes:
                             raise _UploadTooLarge
                         await asyncio.to_thread(f.write, chunk)
             except _UploadTooLarge:
@@ -436,7 +437,7 @@ class ApiServer:
                 for entry in saved:
                     Path(entry["path"]).unlink(missing_ok=True)
                 return web.json_response(
-                    {"error": f"total upload exceeds {_MAX_UPLOAD_BYTES // (1024 * 1024)} MB limit"},
+                    {"error": f"total upload exceeds {self._max_upload_bytes // (1024 * 1024)} MB limit"},
                     status=413,
                 )
 

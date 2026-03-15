@@ -201,6 +201,7 @@ class ApiConfig(BaseModel):
     token: str = ""
     chat_id: int = 0
     allow_public: bool = False
+    max_upload_mb: int = 100
 
 
 def deep_merge_config(

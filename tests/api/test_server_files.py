@@ -77,11 +77,12 @@ def _make_app(tmp_path: Path) -> web.Application:
         workspace=workspace,
     )
 
-    app = web.Application(client_max_size=50 * 1024 * 1024)
+    app = web.Application(client_max_size=server._max_upload_bytes)
     app.router.add_get("/health", server._handle_health)
     app.router.add_get("/files", server._handle_file_download)
     app.router.add_post("/upload", server._handle_file_upload)
     app.router.add_post("/upload/multi", server._handle_multi_file_upload)
+    app["_server"] = server
 
     return app
 
@@ -272,10 +273,9 @@ class TestMultiFileUpload:
 
     async def test_cumulative_size_limit_returns_413(self, api_client) -> None:
         """Exceeding the cumulative upload limit returns 413 and cleans up files."""
-        from botwerk_bot.api import server as _srv
-
-        original = _srv._MAX_UPLOAD_BYTES
-        _srv._MAX_UPLOAD_BYTES = 100  # tiny limit for testing
+        server = api_client.app["_server"]
+        original = server._max_upload_bytes
+        server._max_upload_bytes = 100  # tiny limit for testing
         try:
             data = FormData()
             data.add_field("file", b"A" * 60, filename="a.bin")
@@ -290,4 +290,4 @@ class TestMultiFileUpload:
             body = await resp.json()
             assert "limit" in body["error"]
         finally:
-            _srv._MAX_UPLOAD_BYTES = original
+            server._max_upload_bytes = original
