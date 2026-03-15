@@ -81,6 +81,7 @@ def _make_app(tmp_path: Path) -> web.Application:
     app.router.add_get("/health", server._handle_health)
     app.router.add_get("/files", server._handle_file_download)
     app.router.add_post("/upload", server._handle_file_upload)
+    app.router.add_post("/upload/multi", server._handle_multi_file_upload)
 
     return app
 
@@ -190,3 +191,81 @@ class TestFileUpload:
         dest.write_bytes(b"saved content")
         assert dest.is_file()
         assert dest.read_bytes() == b"saved content"
+
+
+class TestMultiFileUpload:
+    async def test_no_auth_returns_401(self, api_client) -> None:
+        resp = await api_client.post("/upload/multi")
+        assert resp.status == 401
+
+    async def test_upload_multiple_files(self, api_client) -> None:
+        data = FormData()
+        data.add_field("file", b"content one", filename="first.txt")
+        data.add_field("file", b"content two", filename="second.txt")
+
+        resp = await api_client.post(
+            "/upload/multi",
+            data=data,
+            headers={"Authorization": "Bearer test-token"},
+        )
+        assert resp.status == 200
+        body = await resp.json()
+        assert len(body["files"]) == 2
+        assert body["files"][0]["name"] == "first.txt"
+        assert body["files"][0]["size"] == 11
+        assert body["files"][1]["name"] == "second.txt"
+        assert body["files"][1]["size"] == 11
+        assert body["total_size"] == 22
+        assert "[INCOMING FILE]" in body["prompt"]
+
+    async def test_upload_with_caption(self, api_client) -> None:
+        data = FormData()
+        data.add_field("file", b"img1", filename="a.jpg", content_type="image/jpeg")
+        data.add_field("file", b"img2", filename="b.png", content_type="image/png")
+        data.add_field("caption", "Check these images")
+
+        resp = await api_client.post(
+            "/upload/multi",
+            data=data,
+            headers={"Authorization": "Bearer test-token"},
+        )
+        assert resp.status == 200
+        body = await resp.json()
+        assert len(body["files"]) == 2
+        assert "Check these images" in body["prompt"]
+
+    async def test_no_files_returns_400(self, api_client) -> None:
+        resp = await api_client.post(
+            "/upload/multi",
+            data=b"not multipart",
+            headers={"Authorization": "Bearer test-token"},
+        )
+        assert resp.status == 400
+
+    async def test_single_file_works(self, api_client) -> None:
+        data = FormData()
+        data.add_field("file", b"solo", filename="only.txt")
+
+        resp = await api_client.post(
+            "/upload/multi",
+            data=data,
+            headers={"Authorization": "Bearer test-token"},
+        )
+        assert resp.status == 200
+        body = await resp.json()
+        assert len(body["files"]) == 1
+        assert body["files"][0]["name"] == "only.txt"
+
+    async def test_files_exist_on_disk(self, api_client) -> None:
+        data = FormData()
+        data.add_field("file", b"aaa", filename="x.txt")
+        data.add_field("file", b"bbb", filename="y.txt")
+
+        resp = await api_client.post(
+            "/upload/multi",
+            data=data,
+            headers={"Authorization": "Bearer test-token"},
+        )
+        body = await resp.json()
+        for entry in body["files"]:
+            assert Path(entry["path"]).is_file()

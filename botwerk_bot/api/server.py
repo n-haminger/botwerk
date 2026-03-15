@@ -25,6 +25,7 @@ HTTP endpoints
 - ``GET /health``              -- health check
 - ``GET /files?path=<abs>``    -- download a file (Bearer token auth)
 - ``POST /upload``             -- upload a file (Bearer token auth, multipart)
+- ``POST /upload/multi``       -- upload multiple files (Bearer token auth, multipart)
 """
 
 from __future__ import annotations
@@ -66,6 +67,10 @@ StreamingMessageHandler = Callable[..., Awaitable[Any]]
 AbortHandler = Callable[[int], Awaitable[int]]
 
 _MAX_UPLOAD_BYTES = 50 * 1024 * 1024  # 50 MB
+
+
+class _UploadTooLarge(Exception):
+    """Internal sentinel raised when cumulative upload size exceeds the limit."""
 
 
 def _detect_tailscale() -> bool:
@@ -239,6 +244,7 @@ class ApiServer:
         app.router.add_get("/ws", self._handle_websocket)
         app.router.add_get("/files", self._handle_file_download)
         app.router.add_post("/upload", self._handle_file_upload)
+        app.router.add_post("/upload/multi", self._handle_multi_file_upload)
 
         self._runner = web.AppRunner(app, access_log=None)
         await self._runner.setup()
@@ -366,6 +372,104 @@ class ApiServer:
                 "prompt": prompt,
             }
         )
+
+    async def _handle_multi_file_upload(self, request: web.Request) -> web.Response:
+        """Accept multiple files in a single multipart upload.
+
+        Each ``file`` field is saved independently.  An optional ``caption``
+        field (anywhere in the stream) is attached to every file's prompt.
+        Returns a JSON object with a ``files`` list and a combined ``prompt``.
+        """
+        if not self._verify_bearer(request):
+            return web.json_response({"error": "unauthorized"}, status=401)
+
+        if self._upload_dir is None or self._workspace is None:
+            return web.json_response({"error": "file uploads not configured"}, status=503)
+
+        try:
+            reader = await request.multipart()
+        except (ValueError, AssertionError):
+            return web.json_response({"error": "multipart body required"}, status=400)
+
+        saved: list[dict[str, Any]] = []
+        caption: str | None = None
+        cumulative_bytes = 0
+
+        while True:
+            field = await reader.next()
+            if field is None:
+                break
+
+            if not isinstance(field, BodyPartReader):
+                continue
+
+            if field.name == "caption":
+                caption = (await field.read(decode=True)).decode("utf-8", errors="replace")
+                continue
+
+            if field.name != "file":
+                # Skip unknown fields gracefully.
+                await field.read()
+                continue
+
+            raw_name = field.filename or "upload"
+            safe_name = sanitize_filename(raw_name)
+
+            dest = await asyncio.to_thread(prepare_destination, self._upload_dir, safe_name)
+
+            file_bytes = 0
+            try:
+                with dest.open("wb") as f:
+                    while True:
+                        chunk = await field.read_chunk(65536)
+                        if not chunk:
+                            break
+                        file_bytes += len(chunk)
+                        cumulative_bytes += len(chunk)
+                        if cumulative_bytes > _MAX_UPLOAD_BYTES:
+                            raise _UploadTooLarge
+                        f.write(chunk)
+            except _UploadTooLarge:
+                dest.unlink(missing_ok=True)
+                # Clean up already-saved files from this request.
+                for entry in saved:
+                    Path(entry["path"]).unlink(missing_ok=True)
+                return web.json_response(
+                    {"error": f"total upload exceeds {_MAX_UPLOAD_BYTES // (1024 * 1024)} MB limit"},
+                    status=413,
+                )
+
+            mime = await asyncio.to_thread(guess_mime, dest)
+            saved.append({
+                "path": str(dest),
+                "name": dest.name,
+                "mime": mime,
+                "size": file_bytes,
+            })
+            logger.info("API multi-upload: %s (%s, %d bytes)", dest.name, mime, file_bytes)
+
+        if not saved:
+            return web.json_response({"error": "no files received"}, status=400)
+
+        # Build individual MediaInfo objects and combine prompts.
+        prompts: list[str] = []
+        for entry in saved:
+            info = MediaInfo(
+                path=Path(entry["path"]),
+                media_type=entry["mime"],
+                file_name=entry["name"],
+                caption=caption,
+                original_type=classify_mime(entry["mime"]),
+            )
+            prompts.append(build_media_prompt(info, self._workspace, transport="API"))
+
+        combined_prompt = "\n---\n".join(prompts)
+
+        return web.json_response({
+            "files": saved,
+            "prompt": combined_prompt,
+            "total_size": cumulative_bytes,
+        })
 
     # -- WebSocket handlers ----------------------------------------------------
 
