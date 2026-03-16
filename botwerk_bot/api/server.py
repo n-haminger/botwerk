@@ -1,4 +1,4 @@
-"""Direct API server: WebSocket interface for app connections.
+"""Direct API server: WebSocket + HTTP interface for app connections.
 
 Runs alongside the Telegram bot without affecting it.  Designed for use
 over Tailscale (default) or other private networks so that no traffic
@@ -20,12 +20,17 @@ WebSocket protocol (E2E encrypted)
 6. Encrypted abort: ``{"type": "abort"}`` (or ``/stop`` as message text)
    Server responds ``{"type": "abort_ok", "killed": N}``
 
+HTTP polling fallback
+---------------------
+- ``GET  /poll?chat_id=N&after=S``  -- poll buffered events after seq *S*
+- ``POST /send``                    -- send a message when WS is unavailable
+
 HTTP endpoints
 --------------
-- ``GET /health``              -- health check
-- ``GET /files?path=<abs>``    -- download a file (Bearer token auth)
-- ``POST /upload``             -- upload a file (Bearer token auth, multipart)
-- ``POST /upload/multi``       -- upload multiple files (Bearer token auth, multipart)
+- ``GET  /health``              -- health check
+- ``GET  /files?path=<abs>``    -- download a file (Bearer token auth)
+- ``POST /upload``              -- upload a file (Bearer token auth, multipart)
+- ``POST /upload/multi``        -- upload multiple files (Bearer token auth, multipart)
 """
 
 from __future__ import annotations
@@ -35,6 +40,7 @@ import hmac
 import json
 import logging
 import shutil
+import time
 from collections.abc import Awaitable, Callable, Sequence
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
@@ -67,6 +73,50 @@ StreamingMessageHandler = Callable[..., Awaitable[Any]]
 AbortHandler = Callable[[int], Awaitable[int]]
 
 _DEFAULT_MAX_UPLOAD_MB = 100
+
+# -- Event buffer for HTTP polling fallback --------------------------------
+
+_BUFFER_SIZE = 200
+_BUFFER_TTL_S = 300  # 5 minutes
+
+
+class _EventBuffer:
+    """Per-chat ring buffer that stores recent plaintext events for HTTP polling.
+
+    Events are plain dicts (NOT encrypted).  The poll endpoint returns them
+    as-is -- encryption is the proxy's responsibility, not ours.
+    """
+
+    __slots__ = ("_buf", "_last_access", "_seq")
+
+    def __init__(self) -> None:
+        self._buf: list[tuple[int, dict[str, object]]] = []
+        self._seq: int = 0
+        self._last_access: float = time.monotonic()
+
+    @property
+    def seq(self) -> int:
+        return self._seq
+
+    def push(self, event: dict[str, object]) -> int:
+        """Append an event and return its sequence number."""
+        self._seq += 1
+        self._buf.append((self._seq, event))
+        if len(self._buf) > _BUFFER_SIZE:
+            self._buf.pop(0)
+        self._last_access = time.monotonic()
+        return self._seq
+
+    def after(self, seq: int) -> list[dict[str, object]]:
+        """Return all events with seq > *seq*, wrapped with their seq number."""
+        self._last_access = time.monotonic()
+        return [
+            {**evt, "_seq": s} for s, evt in self._buf if s > seq
+        ]
+
+    @property
+    def expired(self) -> bool:
+        return (time.monotonic() - self._last_access) > _BUFFER_TTL_S
 
 
 class _UploadTooLarge(Exception):
@@ -123,31 +173,60 @@ class _SecureChannel:
         return self._e2e.decrypt(frame)
 
 
+class _NullChannel:
+    """Dummy channel for HTTP-dispatched messages (no WebSocket to send to)."""
+
+    @property
+    def closed(self) -> bool:
+        return True
+
+    async def send(self, data: dict[str, object]) -> bool:
+        return False
+
+    def decrypt(self, frame: str) -> dict[str, Any]:
+        raise RuntimeError("_NullChannel cannot decrypt")
+
+
 class _StreamCallbacks:
-    """Streaming callbacks that forward encrypted orchestrator events to a WebSocket."""
+    """Streaming callbacks that forward orchestrator events to a WebSocket AND event buffer."""
 
-    __slots__ = ("channel", "disconnected")
+    __slots__ = ("_buffer_fn", "channel", "disconnected")
 
-    def __init__(self, channel: _SecureChannel) -> None:
-        self.channel = channel
+    def __init__(
+        self,
+        channel: _SecureChannel | _NullChannel,
+        buffer_fn: Callable[[dict[str, object]], int] | None = None,
+    ) -> None:
+        self.channel: _SecureChannel | _NullChannel = channel
         self.disconnected = False
+        self._buffer_fn = buffer_fn
+
+    def _buffer(self, event: dict[str, object]) -> None:
+        if self._buffer_fn is not None:
+            self._buffer_fn(event)
 
     async def on_text(self, delta: str) -> None:
+        event: dict[str, object] = {"type": "text_delta", "data": delta}
+        self._buffer(event)
         if self.disconnected:
             return
-        if not await self.channel.send({"type": "text_delta", "data": delta}):
+        if not await self.channel.send(event):
             self.disconnected = True
 
     async def on_tool(self, name: str) -> None:
+        event: dict[str, object] = {"type": "tool_activity", "data": name}
+        self._buffer(event)
         if self.disconnected:
             return
-        if not await self.channel.send({"type": "tool_activity", "data": name}):
+        if not await self.channel.send(event):
             self.disconnected = True
 
     async def on_system(self, label: str | None) -> None:
+        event: dict[str, object] = {"type": "system_status", "data": label}
+        self._buffer(event)
         if self.disconnected:
             return
-        if not await self.channel.send({"type": "system_status", "data": label}):
+        if not await self.channel.send(event):
             self.disconnected = True
 
 
@@ -189,6 +268,7 @@ class ApiServer:
         self._runner: web.AppRunner | None = None
         self._lock_pool = lock_pool if lock_pool is not None else LockPool()
         self._active_ws: set[web.WebSocketResponse] = set()
+        self._event_buffers: dict[int, _EventBuffer] = {}
         # File context (set via set_file_context)
         self._allowed_roots: Sequence[Path] | None = None
         self._upload_dir: Path | None = None
@@ -246,6 +326,8 @@ class ApiServer:
         app.router.add_get("/files", self._handle_file_download)
         app.router.add_post("/upload", self._handle_file_upload)
         app.router.add_post("/upload/multi", self._handle_multi_file_upload)
+        app.router.add_get("/poll", self._handle_poll)
+        app.router.add_post("/send", self._handle_send)
 
         self._runner = web.AppRunner(app, access_log=None)
         await self._runner.setup()
@@ -269,6 +351,25 @@ class ApiServer:
             await self._runner.cleanup()
             self._runner = None
         logger.info("API server stopped")
+
+    # -- Event buffer ----------------------------------------------------------
+
+    def _get_buffer(self, chat_id: int) -> _EventBuffer:
+        """Get or create the event buffer for a chat.  Prunes expired buffers."""
+        buf = self._event_buffers.get(chat_id)
+        if buf is None:
+            buf = _EventBuffer()
+            self._event_buffers[chat_id] = buf
+        # Lazy prune: clean up expired buffers occasionally
+        if len(self._event_buffers) > 50:
+            expired = [k for k, v in self._event_buffers.items() if v.expired]
+            for k in expired:
+                del self._event_buffers[k]
+        return buf
+
+    def _buffer_event(self, chat_id: int, event: dict[str, object]) -> int:
+        """Push an event into the chat's buffer. Returns the seq number."""
+        return self._get_buffer(chat_id).push(event)
 
     # -- Bearer token auth for HTTP endpoints ----------------------------------
 
@@ -473,6 +574,121 @@ class ApiServer:
             "total_size": cumulative_bytes,
         })
 
+    # -- HTTP polling + send fallback ------------------------------------------
+
+    async def _handle_poll(self, request: web.Request) -> web.Response:
+        """Return buffered events for a chat after a given sequence number.
+
+        ``GET /poll?chat_id=N&after=S``  (Bearer token auth)
+        """
+        if not self._verify_bearer(request):
+            return web.json_response({"error": "unauthorized"}, status=401)
+
+        try:
+            chat_id = int(request.query["chat_id"])
+        except (KeyError, ValueError):
+            return web.json_response({"error": "chat_id required (integer)"}, status=400)
+
+        after_seq = int(request.query.get("after", "0"))
+        buf = self._event_buffers.get(chat_id)
+        if buf is None:
+            return web.json_response({"seq": 0, "events": []})
+
+        events = buf.after(after_seq)
+        return web.json_response({"seq": buf.seq, "events": events})
+
+    async def _handle_send(self, request: web.Request) -> web.Response:
+        """Accept a message via HTTP POST when WebSocket is unavailable.
+
+        ``POST /send``  JSON body: ``{"chat_id": N, "text": "..."}``
+        Bearer token auth.  The response is NOT streamed — the client must
+        poll ``/poll`` to receive streaming events and the final result.
+        """
+        if not self._verify_bearer(request):
+            return web.json_response({"error": "unauthorized"}, status=401)
+
+        try:
+            body = await request.json()
+        except (json.JSONDecodeError, ValueError):
+            return web.json_response({"error": "invalid JSON body"}, status=400)
+
+        chat_id = body.get("chat_id", self._default_chat_id)
+        if not isinstance(chat_id, int) or chat_id <= 0:
+            chat_id = self._default_chat_id
+
+        text = str(body.get("text", "")).strip()
+        if not text:
+            return web.json_response({"error": "empty message"}, status=400)
+
+        if not self._handle_message:
+            return web.json_response({"error": "handler not configured"}, status=503)
+
+        channel_id = body.get("channel_id")
+        if not isinstance(channel_id, int) or channel_id <= 0:
+            channel_id = None
+        key = SessionKey(chat_id=chat_id, topic_id=channel_id)
+
+        lock = self._lock_pool.get(key.lock_key)
+
+        # Intercept /stop
+        if text.lower() == "/stop":
+            killed = 0
+            if self._handle_abort:
+                killed = await self._handle_abort(chat_id)
+            self._buffer_event(chat_id, {"type": "abort_ok", "killed": killed})
+            return web.json_response({"accepted": True, "type": "abort"})
+
+        # Fire-and-forget: dispatch in background so we can return 202 immediately
+        async def _run() -> None:
+            async with lock:
+                set_log_context(operation="api-http", chat_id=key.chat_id)
+                await self._dispatch_message_http(key, text)
+
+        asyncio.ensure_future(_run())
+
+        buf = self._get_buffer(chat_id)
+        return web.json_response({"accepted": True, "seq": buf.seq}, status=202)
+
+    async def _dispatch_message_http(
+        self,
+        key: SessionKey,
+        text: str,
+    ) -> None:
+        """Dispatch a message from HTTP /send — results go only to the event buffer."""
+        assert self._handle_message is not None
+
+        def buf(event: dict[str, object]) -> int:
+            return self._buffer_event(key.chat_id, event)
+
+        # Create a dummy channel that never sends (no WS)
+        callbacks = _StreamCallbacks(_NullChannel(), buffer_fn=buf)
+
+        try:
+            result = await self._handle_message(
+                key,
+                text,
+                on_text_delta=callbacks.on_text,
+                on_tool_activity=callbacks.on_tool,
+                on_system_status=callbacks.on_system,
+            )
+        except asyncio.CancelledError:
+            raise
+        except Exception:
+            logger.exception("API HTTP dispatch error key=%s", key.storage_key)
+            buf({"type": "error", "code": "internal_error", "message": "An internal error occurred"})
+            return
+
+        if result is None:
+            return
+
+        files = _parse_file_refs(result.text)
+        buf({
+            "type": "result",
+            "text": result.text,
+            "stream_fallback": result.stream_fallback,
+            "files": files,
+        })
+
     # -- WebSocket handlers ----------------------------------------------------
 
     async def _handle_websocket(
@@ -672,31 +888,31 @@ class ApiServer:
             )
             return
 
-        callbacks = _StreamCallbacks(channel)
+        def buf(event: dict[str, object]) -> int:
+            return self._buffer_event(key.chat_id, event)
+
+        callbacks = _StreamCallbacks(channel, buffer_fn=buf)
         result = await self._execute_streaming(key, text, callbacks)
         if result is None:
             return
 
         if callbacks.disconnected:
             logger.info(
-                "API client disconnected mid-stream, aborting key=%s",
+                "API client disconnected mid-stream key=%s — sending result anyway",
                 key.storage_key,
             )
-            if self._handle_abort:
-                await self._handle_abort(key.chat_id)
-            return
 
         # Parse file references from the response for the app
         files = _parse_file_refs(result.text)
 
-        await channel.send(
-            {
-                "type": "result",
-                "text": result.text,
-                "stream_fallback": result.stream_fallback,
-                "files": files,
-            },
-        )
+        result_event: dict[str, object] = {
+            "type": "result",
+            "text": result.text,
+            "stream_fallback": result.stream_fallback,
+            "files": files,
+        }
+        buf(result_event)
+        await channel.send(result_event)
 
     async def _execute_streaming(
         self,
@@ -736,4 +952,6 @@ class ApiServer:
         killed = 0
         if self._handle_abort:
             killed = await self._handle_abort(chat_id)
-        await channel.send({"type": "abort_ok", "killed": killed})
+        event: dict[str, object] = {"type": "abort_ok", "killed": killed}
+        self._buffer_event(chat_id, event)
+        await channel.send(event)

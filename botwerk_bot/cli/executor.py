@@ -143,7 +143,7 @@ async def run_streaming_subprocess(
         stderr=asyncio.subprocess.PIPE,
         cwd=spec.use_cwd,
         env=subprocess_env,
-        limit=4 * 1024 * 1024,
+        limit=16 * 1024 * 1024,
         creationflags=_CREATION_FLAGS,
     )
     if process.stdout is None or process.stderr is None:
