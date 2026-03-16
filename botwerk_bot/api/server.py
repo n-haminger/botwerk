@@ -114,6 +114,12 @@ class _EventBuffer:
             {**evt, "_seq": s} for s, evt in self._buf if s > seq
         ]
 
+    def clear(self) -> None:
+        """Discard all buffered events and reset the sequence counter."""
+        self._buf.clear()
+        self._seq = 0
+        self._last_access = time.monotonic()
+
     @property
     def expired(self) -> bool:
         return (time.monotonic() - self._last_access) > _BUFFER_TTL_S
@@ -370,6 +376,12 @@ class ApiServer:
     def _buffer_event(self, chat_id: int, event: dict[str, object]) -> int:
         """Push an event into the chat's buffer. Returns the seq number."""
         return self._get_buffer(chat_id).push(event)
+
+    def clear_buffer(self, chat_id: int) -> None:
+        """Clear the event buffer for a specific chat, discarding old events."""
+        buf = self._event_buffers.get(chat_id)
+        if buf is not None:
+            buf.clear()
 
     # -- Bearer token auth for HTTP endpoints ----------------------------------
 

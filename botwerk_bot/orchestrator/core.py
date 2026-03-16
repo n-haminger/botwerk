@@ -161,6 +161,7 @@ class Orchestrator:
             lambda: self._process_registry.kill_stale(stale_max)
         )
         self._api_stop: Callable[[], Awaitable[None]] | None = None
+        self._api_clear_buffer: Callable[[int], None] | None = None
         self._inflight_tracker = InflightTracker(paths.inflight_turns_path)
         self._hook_registry = MessageHookRegistry()
         self._hook_registry.register(DELEGATION_BRIEF)

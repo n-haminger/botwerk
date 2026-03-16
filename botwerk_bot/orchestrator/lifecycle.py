@@ -172,6 +172,7 @@ async def start_api_server(
         return
 
     orch._api_stop = server.stop
+    orch._api_clear_buffer = server.clear_buffer
 
 
 async def ensure_docker(orch: Orchestrator) -> None:
