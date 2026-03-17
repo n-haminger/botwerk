@@ -487,6 +487,7 @@ class AgentSupervisor:
         config_path = agent_home / "config" / "config.json"
         if config_path.exists():
             updates: dict[str, object] = {
+                "botwerk_home": str(agent_home),
                 "provider": config.provider,
                 "model": config.model,
                 "reasoning_effort": config.reasoning_effort,
