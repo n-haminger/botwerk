@@ -78,10 +78,15 @@ def main() -> None:
         body["topic_id"] = int(topic_id)
     payload = json.dumps(body).encode()
 
+    headers: dict[str, str] = {"Content-Type": "application/json"}
+    secret = os.environ.get("BOTWERK_AGENT_SECRET", "")
+    if secret:
+        headers["Authorization"] = f"Bearer {secret}"
+
     req = urllib.request.Request(
         url,
         data=payload,
-        headers={"Content-Type": "application/json"},
+        headers=headers,
         method="POST",
     )
 

@@ -2,9 +2,11 @@
 
 from __future__ import annotations
 
+import secrets
 from pathlib import Path
+from typing import Literal
 
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
 from botwerk_bot.config import (
     AgentConfig,
@@ -66,6 +68,12 @@ class SubAgentConfig(BaseModel):
     user_timezone: str | None = None
     linux_user: bool | None = None  # Run CLI as dedicated Linux user (botwerk-<name>)
 
+    # Inter-agent security
+    agent_secret: str = Field(default_factory=lambda: secrets.token_hex(32))
+    trust_level: Literal["privileged", "restricted"] = "restricted"
+    can_contact: list[str] = Field(default_factory=list)
+    accept_from: list[str] = Field(default_factory=list)
+
 
 def merge_sub_agent_config(
     main: AgentConfig,
@@ -83,7 +91,10 @@ def merge_sub_agent_config(
     base = main.model_dump()
 
     # agents.json explicit overrides (non-None fields win)
-    overrides = sub.model_dump(exclude_none=True, exclude={"name", "linux_user"})
+    overrides = sub.model_dump(
+        exclude_none=True,
+        exclude={"name", "linux_user", "agent_secret", "trust_level", "can_contact", "accept_from"},
+    )
     base.update(overrides)
 
     base["botwerk_home"] = str(agent_home)
@@ -95,6 +106,9 @@ def merge_sub_agent_config(
     base["allowed_group_ids"] = sub.allowed_group_ids or []
     if sub.matrix is not None:
         base["matrix"] = sub.matrix.model_dump()
+
+    # Carry the agent secret through to the merged config for CLI injection.
+    base["agent_secret"] = sub.agent_secret
 
     # Sub-agents don't need the user-facing API server (they use InterAgentBus).
     # Disable it unless the sub-agent explicitly provides an api config.

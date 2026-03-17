@@ -146,6 +146,11 @@ python3 tools/agent_tools/create_agent.py \
   --provider claude --model opus
 ```
 
+**Communication restrictions:** Agents with `--linux-user` are fully isolated.
+They cannot initiate contact with any other agent (including peer sub-agents).
+Only the main agent can send messages to them. This is enforced at the API
+level and cannot be overridden via `can_contact` in `agents.json`.
+
 Requires prior setup: the provisioning script (`scripts/manage-agent-user.sh`)
 must be root-owned, and a sudoers entry must allow the service user to call it.
 See `docs/config.md` → "Linux user isolation" for details.
@@ -182,6 +187,29 @@ register_new_matrix_user -u botname -p password \
 2. Create the agent with `create_agent.py --transport matrix ...`
 3. On first start, the bot logs in with the password and saves an access token
 4. The password is not used again after the initial login
+
+## Inter-Agent Security
+
+All inter-agent communication is authenticated and authorized.
+
+**How it works:**
+- Each agent has a unique secret token (auto-generated, stored in `agents.json`).
+- Every API call to the inter-agent bus requires an `Authorization: Bearer <token>` header.
+- The framework injects `BOTWERK_AGENT_SECRET` into your environment automatically.
+- The `ask_agent.py` and `ask_agent_async.py` tools handle authentication for you.
+
+**Access control (ACLs):**
+- **Normal sub-agents** can communicate freely with each other and with the main agent.
+- **Isolated agents** (`linux_user: true` in agents.json) are fully isolated: they cannot
+  initiate contact with any other agent. Only the main agent can send messages to them.
+- ACLs are configured per-agent via `can_contact` and `accept_from` in `agents.json`.
+- If your message is blocked, you will receive a detailed error explaining why.
+
+**If you see an "inter-agent communication blocked" error:**
+- You are likely an isolated agent and cannot initiate outbound communication.
+- You CAN still respond to incoming messages from allowed agents (e.g. main).
+- Do NOT retry the same call — it will be blocked again. Instead, inform the user
+  that you cannot contact the target agent due to security restrictions.
 
 ## Inter-Agent Communication
 

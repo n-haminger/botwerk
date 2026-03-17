@@ -10,6 +10,7 @@ from typing import TYPE_CHECKING
 from botwerk_bot.config import AgentConfig, update_config_file_async
 from botwerk_bot.infra.file_watcher import FileWatcher
 from botwerk_bot.infra.restart import EXIT_RESTART
+from botwerk_bot.multiagent.auth import AgentAuthRegistry
 from botwerk_bot.multiagent.health import AgentHealth
 from botwerk_bot.multiagent.models import SubAgentConfig, merge_sub_agent_config
 from botwerk_bot.multiagent.registry import AgentRegistry
@@ -82,6 +83,7 @@ class AgentSupervisor:
         self._internal_api: InternalAgentAPI | None = None
         self._shared_knowledge: SharedKnowledgeSync | None = None
         self._task_hub: TaskHub | None = None
+        self._auth_registry = AgentAuthRegistry()
 
     @property
     def stacks(self) -> dict[str, AgentStack]:
@@ -95,19 +97,56 @@ class AgentSupervisor:
     def bus(self) -> InterAgentBus | None:
         return self._bus
 
+    def _init_auth(self) -> None:
+        """Load or generate main-agent secret and load ACLs from agents.json."""
+        import secrets as _secrets
+
+        secret_path = self._main_paths.botwerk_home / ".main_agent_secret"
+        secret = ""
+
+        # Try to load persisted secret
+        if secret_path.is_file():
+            try:
+                secret = secret_path.read_text(encoding="utf-8").strip()
+            except OSError:
+                logger.warning("Failed to read main agent secret, generating new one")
+
+        # Generate and persist if missing
+        if not secret:
+            secret = _secrets.token_hex(32)
+            try:
+                import stat
+
+                secret_path.write_text(secret + "\n", encoding="utf-8")
+                secret_path.chmod(stat.S_IRUSR | stat.S_IWUSR)  # 0600
+            except OSError:
+                logger.warning("Failed to persist main agent secret to %s", secret_path)
+
+        self._main_config = self._main_config.model_copy(
+            update={"agent_secret": secret}
+        )
+        sub_agents = self._registry.load()
+        self._ensure_agent_secrets(sub_agents)
+        self._auth_registry.reload(
+            sub_agents, main_agent_secret=self._main_config.agent_secret
+        )
+
     async def start(self) -> int:
         """Start main agent + all sub-agents. Blocks until main agent exits."""
         self._running = True
 
-        # Initialize inter-agent bus
+        # Initialize inter-agent bus with auth registry
         from botwerk_bot.multiagent.bus import InterAgentBus
         from botwerk_bot.multiagent.internal_api import InternalAgentAPI
 
-        self._bus = InterAgentBus()
+        self._init_auth()
+
+        self._bus = InterAgentBus(auth_registry=self._auth_registry)
         self._internal_api = InternalAgentAPI(
             self._bus,
             port=self._main_config.interagent_port,
             docker_mode=self._main_config.docker.enabled,
+            auth_registry=self._auth_registry,
         )
         self._internal_api.set_health_ref(self._health)
         started = await self._internal_api.start()
@@ -592,7 +631,11 @@ class AgentSupervisor:
     async def _on_agents_changed(self) -> None:
         """Called when agents.json mtime changes. Sync running agents."""
         async with self._agents_lock:
-            desired = {a.name: a for a in self._registry.load()}
+            new_agents = self._registry.load()
+            self._auth_registry.reload(
+                new_agents, main_agent_secret=self._main_config.agent_secret
+            )
+            desired = {a.name: a for a in new_agents}
             current_sub = set(self._stacks.keys()) - {"main"}
             desired_names = set(desired.keys())
 
@@ -620,6 +663,39 @@ class AgentSupervisor:
                     logger.info("agents.json: agent '%s' config changed, restarting", name)
                     await self.stop_agent(name)
                     await self._start_sub_agent(sub_cfg)
+
+    # -- Secret migration ---------------------------------------------------
+
+    def _ensure_agent_secrets(self, agents: list[SubAgentConfig]) -> None:
+        """Persist Pydantic-generated ``agent_secret`` values to agents.json.
+
+        Called once at startup. Pydantic's ``default_factory`` always fills in
+        a secret on load, but the on-disk JSON may not contain it yet. Compare
+        against the raw JSON to detect which secrets are new and need persisting.
+        """
+        import json
+
+        # Read raw JSON to see which agents already have a persisted secret.
+        persisted_secrets: set[str] = set()
+        if self._agents_path.is_file():
+            try:
+                raw = json.loads(self._agents_path.read_text(encoding="utf-8"))
+                for entry in raw:
+                    if isinstance(entry, dict) and entry.get("agent_secret"):
+                        persisted_secrets.add(entry.get("name", ""))
+            except (json.JSONDecodeError, OSError):
+                pass
+
+        needs_write = False
+        for agent in agents:
+            if agent.name not in persisted_secrets:
+                # Secret was generated by Pydantic default — persist it.
+                needs_write = True
+                logger.info("Persisting agent_secret for '%s'", agent.name)
+
+        if needs_write:
+            self._registry.save(agents)
+            logger.info("Persisted generated agent secrets to agents.json")
 
     # -- Notifications ------------------------------------------------------
 

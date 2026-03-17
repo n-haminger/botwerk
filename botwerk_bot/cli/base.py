@@ -100,6 +100,7 @@ class CLIConfig:
     # Multi-agent identification:
     agent_name: str = "main"
     interagent_port: int = 8799
+    agent_secret: str = ""
     # Linux user isolation:
     linux_user: str = ""
 

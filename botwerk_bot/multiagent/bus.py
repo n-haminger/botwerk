@@ -11,6 +11,7 @@ from dataclasses import dataclass, field
 from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
+    from botwerk_bot.multiagent.auth import AgentAuthRegistry
     from botwerk_bot.multiagent.stack import AgentStack
 
 logger = logging.getLogger(__name__)
@@ -104,11 +105,12 @@ class InterAgentBus:
     by calling the target agent's Orchestrator.handle_interagent_message().
     """
 
-    def __init__(self) -> None:
+    def __init__(self, *, auth_registry: AgentAuthRegistry | None = None) -> None:
         self._agents: dict[str, AgentStack] = {}
         self._message_log: list[InterAgentMessage] = []
         self._async_tasks: dict[str, AsyncInterAgentTask] = {}
         self._async_result_handlers: dict[str, AsyncResultCallback] = {}
+        self._auth_registry = auth_registry
 
     def register(self, name: str, stack: AgentStack) -> None:
         """Register an agent on the bus."""
@@ -139,12 +141,22 @@ class InterAgentBus:
         the message. Returns the response text or an error.
         """
         if recipient not in self._agents:
-            available = ", ".join(self._agents.keys()) or "(none)"
             return InterAgentResponse(
                 sender=recipient,
                 text="",
                 success=False,
-                error=f"Agent '{recipient}' not found. Available: {available}",
+                error=f"Agent '{recipient}' not found",
+            )
+
+        # ACL check
+        if self._auth_registry is not None and not self._auth_registry.can_send(sender, recipient):
+            logger.warning("Bus ACL: blocked %s -> %s", sender, recipient)
+            reason = self._auth_registry.explain_block(sender, recipient)
+            return InterAgentResponse(
+                sender=recipient,
+                text="",
+                success=False,
+                error=reason,
             )
 
         target = self._agents[recipient]
@@ -229,6 +241,12 @@ class InterAgentBus:
         """
         if recipient not in self._agents:
             return None
+
+        # ACL check
+        if self._auth_registry is not None and not self._auth_registry.can_send(sender, recipient):
+            logger.warning("Bus ACL: blocked async %s -> %s", sender, recipient)
+            reason = self._auth_registry.explain_block(sender, recipient)
+            raise PermissionError(reason)
 
         o = opts or AsyncSendOptions()
         task_id = secrets.token_hex(6)

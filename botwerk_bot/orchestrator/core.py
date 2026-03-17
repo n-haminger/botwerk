@@ -119,6 +119,7 @@ class Orchestrator:
         docker_container: str = "",
         agent_name: str = "main",
         interagent_port: int = 8799,
+        agent_secret: str = "",
     ) -> None:
         self._config = config
         self._paths: BotwerkPaths = paths
@@ -144,6 +145,7 @@ class Orchestrator:
                 agent_name=agent_name,
                 interagent_port=interagent_port,
                 linux_user=config.linux_user,
+                agent_secret=agent_secret,
             ),
             models=self._providers.models,
             available_providers=frozenset(),

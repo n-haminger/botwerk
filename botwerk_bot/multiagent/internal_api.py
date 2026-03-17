@@ -19,6 +19,7 @@ from typing import TYPE_CHECKING
 from aiohttp import web
 
 if TYPE_CHECKING:
+    from botwerk_bot.multiagent.auth import AgentAuthRegistry
     from botwerk_bot.multiagent.bus import InterAgentBus
     from botwerk_bot.multiagent.health import AgentHealth
     from botwerk_bot.tasks.hub import TaskHub
@@ -46,12 +47,14 @@ class InternalAgentAPI:
         port: int = _DEFAULT_PORT,
         *,
         docker_mode: bool = False,
+        auth_registry: AgentAuthRegistry | None = None,
     ) -> None:
         self._bus = bus
         self._port = port
         self._bind_host = _BIND_ALL_HOST if docker_mode else "127.0.0.1"
         self._health_ref: dict[str, AgentHealth] | None = None
         self._task_hub: TaskHub | None = None
+        self._auth_registry = auth_registry
         self._app = web.Application()
 
         # Inter-agent routes (only when bus is available)
@@ -82,6 +85,92 @@ class InternalAgentAPI:
     @property
     def port(self) -> int:
         return self._port
+
+    def _authenticate(
+        self, request: web.Request, claimed_sender: str
+    ) -> web.Response | str:
+        """Verify Bearer token and ACL for the claimed sender.
+
+        Returns the verified agent name (``str``) on success, or a
+        ``web.Response`` error that the caller should return immediately.
+        """
+        if self._auth_registry is None:
+            # No auth registry configured — pass through (backward compat).
+            return claimed_sender
+
+        auth_header = request.headers.get("Authorization", "")
+        if not auth_header.startswith("Bearer "):
+            logger.warning("Auth: missing/invalid Authorization header from '%s'", claimed_sender)
+            return web.json_response(
+                {"success": False, "error": "Missing or invalid Authorization header"},
+                status=401,
+            )
+
+        token = auth_header[len("Bearer "):]
+        verified = self._auth_registry.verify_token(token)
+        if verified is None:
+            logger.warning("Auth: invalid token from claimed sender '%s'", claimed_sender)
+            return web.json_response(
+                {"success": False, "error": "Invalid agent token"},
+                status=401,
+            )
+
+        if verified != claimed_sender:
+            logger.warning(
+                "Auth: sender mismatch — token belongs to '%s', claimed '%s'",
+                verified,
+                claimed_sender,
+            )
+            return web.json_response(
+                {"success": False, "error": "Sender identity mismatch"},
+                status=403,
+            )
+
+        return verified
+
+    def _authenticate_get(self, request: web.Request) -> web.Response | str | None:
+        """Verify Bearer token for GET endpoints (no claimed sender in body).
+
+        Returns the verified agent name (``str``) on success, ``None`` when
+        no auth registry is configured (backward compat), or a
+        ``web.Response`` error.
+        """
+        if self._auth_registry is None:
+            return None
+
+        auth_header = request.headers.get("Authorization", "")
+        if not auth_header.startswith("Bearer "):
+            logger.warning("Auth GET: missing/invalid Authorization header")
+            return web.json_response(
+                {"success": False, "error": "Missing or invalid Authorization header"},
+                status=401,
+            )
+
+        token = auth_header[len("Bearer "):]
+        verified = self._auth_registry.verify_token(token)
+        if verified is None:
+            logger.warning("Auth GET: invalid token")
+            return web.json_response(
+                {"success": False, "error": "Invalid agent token"},
+                status=401,
+            )
+
+        return verified
+
+    def _check_acl(self, sender: str, recipient: str) -> web.Response | None:
+        """Check ACL for sender→recipient. Returns error response or None."""
+        if self._auth_registry is None:
+            return None
+        if not self._auth_registry.can_send(sender, recipient):
+            logger.warning(
+                "ACL: blocked %s -> %s (not permitted)", sender, recipient
+            )
+            reason = self._auth_registry.explain_block(sender, recipient)
+            return web.json_response(
+                {"success": False, "error": reason},
+                status=403,
+            )
+        return None
 
     async def start(self) -> bool:
         """Start the internal API server.
@@ -139,6 +228,19 @@ class InternalAgentAPI:
                 status=400,
             )
 
+        # Authenticate sender token
+        auth_result = self._authenticate(request, sender)
+        if isinstance(auth_result, web.Response):
+            return auth_result
+        sender = auth_result
+
+        # Check ACL
+        acl_error = self._check_acl(sender, recipient)
+        if acl_error is not None:
+            return acl_error
+
+        logger.debug("Auth OK: %s -> %s (send)", sender, recipient)
+
         assert self._bus is not None  # Routes only registered when bus is set
         result = await self._bus.send(
             sender=sender,
@@ -176,12 +278,24 @@ class InternalAgentAPI:
                 status=400,
             )
 
+        # Authenticate sender token
+        auth_result = self._authenticate(request, sender)
+        if isinstance(auth_result, web.Response):
+            return auth_result
+        sender = auth_result
+
+        # Check ACL
+        acl_error = self._check_acl(sender, recipient)
+        if acl_error is not None:
+            return acl_error
+
+        logger.debug("Auth OK: %s -> %s (send_async)", sender, recipient)
+
         assert self._bus is not None  # Routes only registered when bus is set
         available = self._bus.list_agents()
         if recipient not in available:
-            names = ", ".join(available) or "(none)"
             return web.json_response(
-                {"success": False, "error": f"Agent '{recipient}' not found. Available: {names}"},
+                {"success": False, "error": f"Agent '{recipient}' not found"},
             )
 
         from botwerk_bot.multiagent.bus import AsyncSendOptions
@@ -192,26 +306,38 @@ class InternalAgentAPI:
             chat_id=chat_id,
             topic_id=topic_id,
         )
-        task_id = self._bus.send_async(
-            sender=sender,
-            recipient=recipient,
-            message=message,
-            opts=opts,
-        )
+        try:
+            task_id = self._bus.send_async(
+                sender=sender,
+                recipient=recipient,
+                message=message,
+                opts=opts,
+            )
+        except PermissionError as exc:
+            return web.json_response(
+                {"success": False, "error": str(exc)},
+                status=403,
+            )
         if task_id is None:
             return web.json_response(
-                {"success": False, "error": "Failed to create async task"},
+                {"success": False, "error": f"Agent '{recipient}' not found"},
             )
 
         return web.json_response({"success": True, "task_id": task_id})
 
     async def _handle_list(self, request: web.Request) -> web.Response:
         """GET /interagent/agents — list all registered agents."""
+        auth_result = self._authenticate_get(request)
+        if isinstance(auth_result, web.Response):
+            return auth_result
         assert self._bus is not None  # Routes only registered when bus is set
         return web.json_response({"agents": self._bus.list_agents()})
 
     async def _handle_health(self, request: web.Request) -> web.Response:
         """GET /interagent/health — return live health for all agents."""
+        auth_result = self._authenticate_get(request)
+        if isinstance(auth_result, web.Response):
+            return auth_result
         if self._health_ref is None:
             return web.json_response({"agents": {}})
 
@@ -249,6 +375,13 @@ class InternalAgentAPI:
 
         prompt = data.get("prompt", "")
         sender = data.get("from", "main")
+
+        # Authenticate sender
+        auth_result = self._authenticate(request, sender)
+        if isinstance(auth_result, web.Response):
+            return auth_result
+        sender = auth_result
+
         if not prompt:
             return web.json_response(
                 {"success": False, "error": "Missing 'prompt' field"},
@@ -298,6 +431,13 @@ class InternalAgentAPI:
         task_id = data.get("task_id", "")
         prompt = data.get("prompt", "")
         sender = data.get("from", "")
+
+        # Authenticate sender
+        auth_result = self._authenticate(request, sender)
+        if isinstance(auth_result, web.Response):
+            return auth_result
+        sender = auth_result
+
         if not task_id or not prompt:
             return web.json_response(
                 {"success": False, "error": "Missing 'task_id' or 'prompt' field"},
@@ -305,13 +445,12 @@ class InternalAgentAPI:
             )
 
         # Verify the requester owns this task
-        if sender:
-            entry = self._task_hub.registry.get(task_id)
-            if entry is not None and entry.parent_agent != sender:
-                return web.json_response(
-                    {"success": False, "error": "Not authorized to resume this task"},
-                    status=403,
-                )
+        entry = self._task_hub.registry.get(task_id)
+        if entry is not None and entry.parent_agent != sender:
+            return web.json_response(
+                {"success": False, "error": "Not authorized to resume this task"},
+                status=403,
+            )
 
         try:
             resumed_id = self._task_hub.resume(task_id, prompt, parent_agent=sender)
@@ -323,7 +462,7 @@ class InternalAgentAPI:
     async def _handle_task_ask_parent(self, request: web.Request) -> web.Response:
         """POST /tasks/ask_parent — task agent forwards a question to the parent.
 
-        Expects JSON: ``{"task_id": "...", "question": "..."}``
+        Expects JSON: ``{"task_id": "...", "question": "...", "from": "agent"}``
         Returns immediately. The parent agent will resume the task with the answer.
         """
         if self._task_hub is None:
@@ -342,6 +481,14 @@ class InternalAgentAPI:
 
         task_id = data.get("task_id", "")
         question = data.get("question", "")
+        sender = data.get("from", "")
+
+        # Authenticate sender
+        auth_result = self._authenticate(request, sender)
+        if isinstance(auth_result, web.Response):
+            return auth_result
+        sender = auth_result
+
         if not task_id or not question:
             return web.json_response(
                 {"success": False, "error": "Missing 'task_id' or 'question' field"},
@@ -359,11 +506,22 @@ class InternalAgentAPI:
         )
 
     async def _handle_task_list(self, request: web.Request) -> web.Response:
-        """GET /tasks/list — list tasks, filtered by parent_agent if provided."""
+        """GET /tasks/list — list tasks, filtered by authenticated agent."""
+        auth_result = self._authenticate_get(request)
+        if isinstance(auth_result, web.Response):
+            return auth_result
         if self._task_hub is None:
             return web.json_response({"tasks": []})
 
-        parent_agent = request.query.get("from") or None
+        # Derive filter from authenticated identity, not query parameter.
+        # Privileged agents see all tasks; restricted agents see only their own.
+        verified_agent = auth_result  # str or None (no auth registry)
+        if verified_agent and self._auth_registry:
+            trust = self._auth_registry.get_trust_level(verified_agent)
+            parent_agent = None if trust == "privileged" else verified_agent
+        else:
+            parent_agent = request.query.get("from") or None
+
         entries = self._task_hub.registry.list_all(parent_agent=parent_agent)
         return web.json_response(
             {
@@ -389,13 +547,20 @@ class InternalAgentAPI:
 
         task_id = data.get("task_id", "")
         sender = data.get("from", "")
+
+        # Authenticate sender
+        auth_result = self._authenticate(request, sender)
+        if isinstance(auth_result, web.Response):
+            return auth_result
+        sender = auth_result
+
         if not task_id:
             return web.json_response(
                 {"success": False, "error": "Missing 'task_id' field"},
                 status=400,
             )
 
-        # Verify the requester owns this task
+        # Verify the requester owns this task (sender is always set when auth is active)
         if sender:
             entry = self._task_hub.registry.get(task_id)
             if entry is not None and entry.parent_agent != sender:
@@ -425,6 +590,13 @@ class InternalAgentAPI:
 
         task_id = data.get("task_id", "")
         sender = data.get("from", "")
+
+        # Authenticate sender
+        auth_result = self._authenticate(request, sender)
+        if isinstance(auth_result, web.Response):
+            return auth_result
+        sender = auth_result
+
         if not task_id:
             return web.json_response(
                 {"success": False, "error": "Missing 'task_id' field"},

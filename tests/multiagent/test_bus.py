@@ -68,11 +68,13 @@ class TestBusSyncSend:
         assert result.success is False
         assert "not found" in result.error
 
-    async def test_send_lists_available_agents_in_error(self) -> None:
+    async def test_send_not_found_no_agent_leak(self) -> None:
+        """Error for unknown recipient must NOT leak registered agent names."""
         bus = InterAgentBus()
         bus.register("agent1", _make_stack())
         result = await bus.send("sender", "unknown", "Hello")
-        assert "agent1" in result.error
+        assert "not found" in result.error
+        assert "agent1" not in result.error
 
     async def test_send_to_agent_without_orchestrator(self) -> None:
         bus = InterAgentBus()

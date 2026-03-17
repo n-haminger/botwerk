@@ -53,6 +53,8 @@ def _build_subprocess_env(config: CLIConfig) -> dict[str, str] | None:
     env["BOTWERK_AGENT_NAME"] = config.agent_name
     env["BOTWERK_AGENT_ROLE"] = "main" if config.agent_name == "main" else "sub"
     env["BOTWERK_INTERAGENT_PORT"] = str(config.interagent_port)
+    if config.agent_secret:
+        env["BOTWERK_AGENT_SECRET"] = config.agent_secret
     if config.chat_id:
         env["BOTWERK_CHAT_ID"] = str(config.chat_id)
     if config.topic_id:
