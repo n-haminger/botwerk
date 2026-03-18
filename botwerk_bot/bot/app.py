@@ -62,6 +62,7 @@ from botwerk_bot.bot.welcome import (
 )
 from botwerk_bot.bus.bus import MessageBus
 from botwerk_bot.bus.lock_pool import LockPool
+from botwerk_bot.command_aliases import COMMAND_ALIASES
 from botwerk_bot.commands import BOT_COMMANDS as _COMMAND_DEFS
 from botwerk_bot.commands import MULTIAGENT_SUB_COMMANDS as _MA_SUB_DEFS
 from botwerk_bot.config import AgentConfig
@@ -283,6 +284,20 @@ class TelegramBot:
             base_cmds += ["agents", "agent_start", "agent_stop", "agent_restart"]
         for cmd in base_cmds:
             r.message(Command(cmd, ignore_case=True))(self._on_command)
+
+        # Register command aliases (e.g. /i -> interrupt, /s -> status).
+        # Abort/interrupt aliases are handled in middleware; here we register
+        # aliases for commands that go through aiogram routing.
+        _handler_map: dict[str, Callable[..., Awaitable[None]]] = {
+            "new": self._on_new,
+            "status": self._on_command,
+            "model": self._on_command,
+        }
+        for alias, canonical in COMMAND_ALIASES.items():
+            handler = _handler_map.get(canonical)
+            if handler is not None:
+                r.message(Command(alias, ignore_case=True))(handler)
+
         r.message(F.forum_topic_created)(self._on_forum_topic_created)
         r.message(F.forum_topic_edited)(self._on_forum_topic_edited)
         r.message()(self._on_message)

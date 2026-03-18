@@ -9,6 +9,7 @@ from typing import TYPE_CHECKING
 
 from pydantic import BaseModel
 
+from botwerk_bot.command_aliases import resolve_alias
 from botwerk_bot.orchestrator.selectors.models import ButtonGrid
 
 logger = logging.getLogger(__name__)
@@ -65,6 +66,15 @@ class CommandRegistry:
         if parts and "@" in parts[0]:
             parts[0] = parts[0].split("@", 1)[0]
             cmd = " ".join(parts)
+
+        # Resolve aliases: "/s" -> "/status", "/n" -> "/new", etc.
+        cmd_parts = cmd.split(None, 1)
+        if cmd_parts and cmd_parts[0].startswith("/"):
+            bare = cmd_parts[0][1:]
+            canonical = resolve_alias(bare)
+            if canonical != bare:
+                cmd_parts[0] = f"/{canonical}"
+                cmd = " ".join(cmd_parts)
 
         for entry in self._commands:
             if entry.match_prefix:

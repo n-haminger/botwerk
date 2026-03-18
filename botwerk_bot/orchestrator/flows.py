@@ -370,7 +370,8 @@ async def normal(
             return OrchestratorResult(text="")
         if _reg.was_interrupted(key.chat_id):
             _reg.clear_interrupt(key.chat_id)
-            logger.info("Normal flow interrupted by user")
+            await _update_session(orch, session, response)
+            logger.info("Normal flow interrupted by user (session preserved)")
             return OrchestratorResult(text="")
         if response.timed_out:
             return await _handle_timeout(orch, key, session, response, request)
@@ -448,7 +449,8 @@ async def normal_streaming(
             return OrchestratorResult(text="")
         if _reg.was_interrupted(key.chat_id):
             _reg.clear_interrupt(key.chat_id)
-            logger.info("Streaming flow interrupted by user")
+            await _update_session(orch, session, response)
+            logger.info("Streaming flow interrupted by user (session preserved)")
             return OrchestratorResult(text="")
         if response.timed_out:
             return await _handle_timeout(orch, key, session, response, request)
@@ -605,6 +607,10 @@ async def named_session_flow(
     if orch._process_registry.was_interrupted(key.chat_id):
         orch._process_registry.clear_interrupt(key.chat_id)
         ns.status = "idle"
+        if response.session_id:
+            orch._named_sessions.update_after_response(
+                key.chat_id, session_name, response.session_id
+            )
         return OrchestratorResult(text="")
     if response.is_error:
         ns.status = "idle"
@@ -673,6 +679,10 @@ async def named_session_streaming(
     if orch._process_registry.was_interrupted(key.chat_id):
         orch._process_registry.clear_interrupt(key.chat_id)
         ns.status = "idle"
+        if response.session_id:
+            orch._named_sessions.update_after_response(
+                key.chat_id, session_name, response.session_id
+            )
         return OrchestratorResult(text="")
     if response.is_error:
         ns.status = "idle"

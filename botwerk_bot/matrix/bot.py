@@ -17,6 +17,7 @@ from typing import TYPE_CHECKING
 
 from botwerk_bot.bus.bus import MessageBus
 from botwerk_bot.bus.lock_pool import LockPool
+from botwerk_bot.command_aliases import resolve_alias
 from botwerk_bot.commands import BOT_COMMANDS, MULTIAGENT_SUB_COMMANDS
 from botwerk_bot.config import AgentConfig
 from botwerk_bot.files.allowed_roots import resolve_allowed_roots
@@ -416,6 +417,7 @@ class MatrixBot:
         """Handle commands in Matrix. Supports both !cmd and /cmd prefixes."""
         # Normalize: strip prefix, extract command name
         cmd = text.split(maxsplit=1)[0].lower().lstrip("/!")
+        cmd = resolve_alias(cmd)
         # Ensure text has / prefix for orchestrator compatibility
         if text.startswith("!"):
             text = "/" + text[1:]

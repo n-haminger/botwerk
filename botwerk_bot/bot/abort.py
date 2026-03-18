@@ -1,10 +1,13 @@
 """Abort trigger detection for the Telegram bot.
 
 Recognises the ``/stop`` command and bare-word abort triggers in
-English and German.
+English and German.  Short aliases (e.g. ``/i`` for ``/interrupt``)
+are resolved via :mod:`botwerk_bot.command_aliases`.
 """
 
 from __future__ import annotations
+
+from botwerk_bot.command_aliases import resolve_alias
 
 ABORT_WORDS: frozenset[str] = frozenset(
     {
@@ -58,6 +61,11 @@ def is_abort_message(text: str) -> bool:
     command = stripped.lower().split(None, 1)[0] if stripped else ""
     if command == "/stop" or command.startswith("/stop@"):
         return True
+    # Resolve alias only for prefixed commands (e.g. "/x" or "!x")
+    if command.startswith(("/", "!")):
+        bare = command.lstrip("/!")
+        if bare and resolve_alias(bare) == "stop":
+            return True
     return is_abort_trigger(stripped)
 
 
@@ -89,4 +97,9 @@ def is_interrupt_message(text: str) -> bool:
     command = stripped.lower().split(None, 1)[0] if stripped else ""
     if command in ("/interrupt", "!interrupt") or command.startswith("/interrupt@"):
         return True
+    # Resolve alias only for prefixed commands (e.g. "/i" or "!i")
+    if command.startswith(("/", "!")):
+        bare = command.lstrip("/!")
+        if bare and resolve_alias(bare) == "interrupt":
+            return True
     return is_interrupt_trigger(stripped)

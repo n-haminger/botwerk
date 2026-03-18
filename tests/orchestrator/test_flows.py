@@ -659,3 +659,50 @@ async def test_normal_abort_on_new_session_returns_empty(orch: Orchestrator) -> 
 
     result = await normal(orch, SessionKey(chat_id=1), "Hello")
     assert result.text == ""
+
+
+# ---------------------------------------------------------------------------
+# Interrupt preserves session
+# ---------------------------------------------------------------------------
+
+
+async def test_normal_interrupt_preserves_session(orch: Orchestrator) -> None:
+    """Interrupt updates the session_id from the response before returning."""
+    await _establish_session(orch)
+
+    # CLI returns a new session_id, but the process is interrupted
+    mock_execute = AsyncMock(
+        return_value=_mock_response(session_id="new-sess-after-interrupt"),
+    )
+    object.__setattr__(orch._cli_service, "execute", mock_execute)
+    orch._process_registry._interrupted.add(1)
+
+    result = await normal(orch, SessionKey(chat_id=1), "Hello")
+    assert result.text == ""
+
+    # The session should now have the new session_id
+    session = await orch._sessions.get_active(SessionKey(chat_id=1))
+    assert session is not None
+    assert session.session_id == "new-sess-after-interrupt"
+
+
+async def test_streaming_interrupt_preserves_session(orch: Orchestrator) -> None:
+    """Streaming interrupt updates the session_id from the response."""
+    # Establish session via streaming
+    mock_streaming = AsyncMock(return_value=_mock_response())
+    object.__setattr__(orch._cli_service, "execute_streaming", mock_streaming)
+    await normal_streaming(orch, SessionKey(chat_id=1), "Setup")
+
+    # CLI returns new session_id, but interrupted
+    mock_streaming = AsyncMock(
+        return_value=_mock_response(session_id="stream-new-sess"),
+    )
+    object.__setattr__(orch._cli_service, "execute_streaming", mock_streaming)
+    orch._process_registry._interrupted.add(1)
+
+    result = await normal_streaming(orch, SessionKey(chat_id=1), "Hello")
+    assert result.text == ""
+
+    session = await orch._sessions.get_active(SessionKey(chat_id=1))
+    assert session is not None
+    assert session.session_id == "stream-new-sess"
