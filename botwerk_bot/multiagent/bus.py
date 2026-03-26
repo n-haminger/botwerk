@@ -126,6 +126,10 @@ class InterAgentBus:
         """List all registered agent names."""
         return list(self._agents.keys())
 
+    def get_agent(self, name: str) -> AgentStack | None:
+        """Return the :class:`AgentStack` for *name*, or ``None``."""
+        return self._agents.get(name)
+
     async def send(
         self,
         sender: str,
@@ -443,6 +447,25 @@ class InterAgentBus:
                 result.task_id,
                 result.sender,
             )
+
+    def get_async_tasks_for_agent(self, agent_name: str) -> list[dict[str, object]]:
+        """Return status info for all in-flight async tasks targeting *agent_name*."""
+        results: list[dict[str, object]] = []
+        for task in self._async_tasks.values():
+            if task.recipient != agent_name:
+                continue
+            elapsed = time.time() - task.timestamp
+            done = task.asyncio_task is not None and task.asyncio_task.done()
+            results.append({
+                "task_id": task.task_id,
+                "sender": task.sender,
+                "recipient": task.recipient,
+                "message_preview": task.message[:120],
+                "elapsed_seconds": round(elapsed, 1),
+                "done": done,
+                "session_name": f"ia-{task.sender}",
+            })
+        return results
 
     async def cancel_all_async(self) -> int:
         """Cancel all in-flight async tasks. Returns the number cancelled."""

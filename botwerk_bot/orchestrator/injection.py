@@ -189,6 +189,13 @@ async def handle_interagent_message(
     _feed_memory_log(orch, chat_id, "user", message)
 
     ns.status = "running"
+    orch._named_sessions.mark_execution_start(chat_id, ns.name)
+
+    # Write the user prompt to the transcript
+    orch._named_sessions.append_transcript(
+        chat_id, ns.name, "user", message, extra={"sender": sender}
+    )
+
     request = AgentRequest(
         prompt=prompt,
         chat_id=chat_id,
@@ -201,6 +208,11 @@ async def handle_interagent_message(
         response = await orch._cli_service.execute(request)
     except Exception:
         ns.status = "idle"
+        orch._named_sessions.mark_execution_end(chat_id, ns.name)
+        orch._named_sessions._persist()  # explicit persist on error path
+        orch._named_sessions.append_transcript(
+            chat_id, ns.name, "error", "Execution failed", extra={"sender": sender}
+        )
         logger.exception("Inter-agent message handling failed (from=%s)", sender)
         return (
             f"Error processing inter-agent message from '{sender}'",
@@ -215,6 +227,14 @@ async def handle_interagent_message(
             )
         else:
             ns.status = "idle"
+
+        orch._named_sessions.mark_execution_end(chat_id, ns.name)
+
+        # Write the assistant response to the transcript
+        orch._named_sessions.append_transcript(
+            chat_id, ns.name, "assistant", result_text, extra={"sender": sender}
+        )
+
         _feed_memory_log(orch, chat_id, "assistant", result_text)
         return result_text, ns.name, provider_switch_notice
 

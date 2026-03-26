@@ -64,6 +64,10 @@ class InternalAgentAPI:
             self._app.router.add_get("/interagent/agents", self._handle_list)
         self._app.router.add_get("/interagent/health", self._handle_health)
 
+        # Session status routes (work with or without bus)
+        self._app.router.add_get("/session/status", self._handle_session_status)
+        self._app.router.add_get("/session/list", self._handle_session_list)
+
         # Task routes (always registered)
         self._app.router.add_post("/tasks/create", self._handle_task_create)
         self._app.router.add_post("/tasks/resume", self._handle_task_resume)
@@ -350,6 +354,164 @@ class InternalAgentAPI:
                 "last_crash_error": health.last_crash_error or None,
             }
         return web.json_response({"agents": agents})
+
+    # -- Session status endpoint -------------------------------------------------
+
+    async def _handle_session_status(self, request: web.Request) -> web.Response:
+        """GET /session/status?agent=NAME&name=SESSION_NAME — query named session status.
+
+        Returns session metadata, execution timestamps, in-flight async task
+        info, and the last N transcript entries.
+
+        Query parameters:
+            agent:  Target agent whose session to inspect.
+            name:   Named session name (e.g. ``ia-main``).
+            tail:   Number of transcript entries to return (default 20).
+        """
+        auth_result = self._authenticate_get(request)
+        if isinstance(auth_result, web.Response):
+            return auth_result
+
+        agent_name = request.query.get("agent", "")
+        session_name = request.query.get("name", "")
+        try:
+            tail = int(request.query.get("tail", "20"))
+        except ValueError:
+            return web.json_response(
+                {"success": False, "error": "'tail' must be an integer"},
+                status=400,
+            )
+
+        if not agent_name or not session_name:
+            return web.json_response(
+                {"success": False, "error": "Missing 'agent' or 'name' query parameter"},
+                status=400,
+            )
+
+        # Look up the agent's orchestrator
+        if self._bus is None:
+            return web.json_response(
+                {"success": False, "error": "Multi-agent bus not available"},
+                status=503,
+            )
+
+        stack = self._bus.get_agent(agent_name)
+        if stack is None:
+            return web.json_response(
+                {"success": False, "error": f"Agent '{agent_name}' not found"},
+                status=404,
+            )
+
+        orch = stack.bot.orchestrator
+        if orch is None:
+            return web.json_response(
+                {"success": False, "error": f"Agent '{agent_name}' orchestrator not initialized"},
+                status=503,
+            )
+
+        registry = orch.named_sessions
+        ns = registry.find_by_name(session_name)
+
+        if ns is None:
+            return web.json_response(
+                {
+                    "success": True,
+                    "found": False,
+                    "agent": agent_name,
+                    "session_name": session_name,
+                    "error": "Session not found or ended",
+                },
+            )
+
+        # Check if there's an in-flight async task for this session
+        in_flight_tasks = self._bus.get_async_tasks_for_agent(agent_name)
+        matching_tasks = [
+            t for t in in_flight_tasks if t.get("session_name") == session_name
+        ]
+
+        # Read transcript tail
+        transcript = registry.read_transcript(ns.chat_id, ns.name, tail=tail)
+
+        result: dict[str, object] = {
+            "success": True,
+            "found": True,
+            "agent": agent_name,
+            "session_name": ns.name,
+            "status": ns.status,
+            "provider": ns.provider,
+            "model": ns.model,
+            "message_count": ns.message_count,
+            "created_at": ns.created_at,
+            "started_at": ns.started_at,
+            "finished_at": ns.finished_at,
+            "prompt_preview": ns.prompt_preview,
+            "last_prompt_preview": ns.last_prompt[:200] if ns.last_prompt else "",
+            "in_flight_tasks": matching_tasks,
+            "transcript": transcript,
+        }
+        return web.json_response(result)
+
+    async def _handle_session_list(self, request: web.Request) -> web.Response:
+        """GET /session/list?agent=NAME — list all active named sessions for an agent.
+
+        Returns a list of session summaries (no transcript content).
+        """
+        auth_result = self._authenticate_get(request)
+        if isinstance(auth_result, web.Response):
+            return auth_result
+
+        agent_name = request.query.get("agent", "")
+        if not agent_name:
+            return web.json_response(
+                {"success": False, "error": "Missing 'agent' query parameter"},
+                status=400,
+            )
+
+        if self._bus is None:
+            return web.json_response(
+                {"success": False, "error": "Multi-agent bus not available"},
+                status=503,
+            )
+
+        stack = self._bus.get_agent(agent_name)
+        if stack is None:
+            return web.json_response(
+                {"success": False, "error": f"Agent '{agent_name}' not found"},
+                status=404,
+            )
+
+        orch = stack.bot.orchestrator
+        if orch is None:
+            return web.json_response(
+                {"success": False, "error": f"Agent '{agent_name}' orchestrator not initialized"},
+                status=503,
+            )
+
+        registry = orch.named_sessions
+        sessions: list[dict[str, object]] = [
+            {
+                "name": ns.name,
+                "status": ns.status,
+                "provider": ns.provider,
+                "model": ns.model,
+                "message_count": ns.message_count,
+                "created_at": ns.created_at,
+                "started_at": ns.started_at,
+                "finished_at": ns.finished_at,
+                "prompt_preview": ns.prompt_preview,
+            }
+            for ns in registry.list_all_active()
+        ]
+
+        # Augment with in-flight async task info
+        in_flight = self._bus.get_async_tasks_for_agent(agent_name)
+
+        return web.json_response({
+            "success": True,
+            "agent": agent_name,
+            "sessions": sessions,
+            "in_flight_async_tasks": in_flight,
+        })
 
     # -- Task endpoints ----------------------------------------------------------
 

@@ -3,10 +3,12 @@
 from __future__ import annotations
 
 import asyncio
+import json
 import logging
 import secrets
 import time
 from dataclasses import asdict, dataclass
+from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
@@ -142,6 +144,9 @@ class NamedSession:
     created_at: float
     message_count: int = 0
     last_prompt: str = ""
+    started_at: str = ""  # ISO timestamp when current/last execution started
+    finished_at: str = ""  # ISO timestamp when current/last execution finished
+    transcript_path: str = ""  # path to JSONL transcript file
 
 
 def _session_from_dict(data: dict[str, Any]) -> NamedSession:
@@ -157,6 +162,9 @@ def _session_from_dict(data: dict[str, Any]) -> NamedSession:
         created_at=float(data.get("created_at", 0.0)),
         message_count=int(data.get("message_count", 0)),
         last_prompt=str(data.get("last_prompt", data.get("prompt_preview", ""))),
+        started_at=str(data.get("started_at", "")),
+        finished_at=str(data.get("finished_at", "")),
+        transcript_path=str(data.get("transcript_path", "")),
     )
 
 
@@ -198,6 +206,9 @@ class NamedSessionRegistry:
                     created_at=ns.created_at,
                     message_count=ns.message_count,
                     last_prompt=ns.last_prompt,
+                    started_at=ns.started_at,
+                    finished_at=ns.finished_at,
+                    transcript_path=ns.transcript_path,
                 )
                 ns.status = "idle"
             self._sessions[(ns.chat_id, ns.name)] = ns
@@ -340,3 +351,133 @@ class NamedSessionRegistry:
         return {
             s.name for s in self._sessions.values() if s.chat_id == chat_id and s.status != "ended"
         }
+
+    def find_by_name(self, name: str) -> NamedSession | None:
+        """Return the first non-ended session matching *name* (any chat_id)."""
+        for ns in self._sessions.values():
+            if ns.name == name and ns.status != "ended":
+                return ns
+        return None
+
+    def list_all_active(self) -> list[NamedSession]:
+        """Return all non-ended sessions across all chats, ordered by creation."""
+        return sorted(
+            (s for s in self._sessions.values() if s.status != "ended"),
+            key=lambda s: s.created_at,
+        )
+
+    # -- Transcript support ---------------------------------------------------
+
+    def _transcript_dir(self) -> Path:
+        """Return the directory for session transcripts (sibling of registry file)."""
+        return self._path.parent / "session_transcripts"
+
+    def init_transcript(self, chat_id: int, name: str) -> Path:
+        """Ensure transcript file exists and store its path in the session.
+
+        Returns the Path to the JSONL transcript file.
+        """
+        ns = self._sessions.get((chat_id, name))
+        if ns is None:
+            msg = f"Session not found: ({chat_id}, {name})"
+            raise KeyError(msg)
+
+        if ns.transcript_path:
+            return Path(ns.transcript_path)
+
+        tdir = self._transcript_dir()
+        tdir.mkdir(parents=True, exist_ok=True)
+        path = tdir / f"{chat_id}_{name}.jsonl"
+        ns.transcript_path = str(path)
+        self._persist()
+        return path
+
+    def append_transcript(
+        self,
+        chat_id: int,
+        name: str,
+        role: str,
+        content: str,
+        *,
+        extra: dict[str, Any] | None = None,
+    ) -> None:
+        """Append a single entry to the session's JSONL transcript."""
+        ns = self._sessions.get((chat_id, name))
+        if ns is None:
+            return
+
+        if not ns.transcript_path:
+            self.init_transcript(chat_id, name)
+
+        entry: dict[str, Any] = {
+            "ts": datetime.now(UTC).isoformat(),
+            "role": role,
+            "content": content[:8000],  # cap at 8k chars per entry
+        }
+        if extra:
+            entry.update(extra)
+
+        try:
+            path = Path(ns.transcript_path)
+            path.parent.mkdir(parents=True, exist_ok=True)
+            with path.open("a", encoding="utf-8") as f:
+                f.write(json.dumps(entry, ensure_ascii=False) + "\n")
+        except Exception:
+            logger.warning("Failed to write transcript for session %s", name, exc_info=True)
+
+    def read_transcript(
+        self,
+        chat_id: int,
+        name: str,
+        *,
+        tail: int = 0,
+    ) -> list[dict[str, Any]]:
+        """Read transcript entries for a named session.
+
+        If *tail* > 0, return only the last *tail* entries.
+        """
+        ns = self._sessions.get((chat_id, name))
+        if ns is None or not ns.transcript_path:
+            return []
+
+        path = Path(ns.transcript_path)
+        if not path.exists():
+            return []
+
+        entries: list[dict[str, Any]] = []
+        try:
+            with path.open("r", encoding="utf-8") as f:
+                for raw_line in f:
+                    stripped = raw_line.strip()
+                    if stripped:
+                        entries.append(json.loads(stripped))
+        except Exception:
+            logger.warning("Failed to read transcript for session %s", name, exc_info=True)
+            return []
+
+        if tail > 0:
+            return entries[-tail:]
+        return entries
+
+    def mark_execution_start(self, chat_id: int, name: str) -> None:
+        """Record that execution has started (timestamp).
+
+        Does NOT persist — the next ``update_after_response`` or
+        ``mark_running`` call will flush to disk.
+        """
+        ns = self._sessions.get((chat_id, name))
+        if ns is None:
+            return
+        ns.started_at = datetime.now(UTC).isoformat()
+        ns.finished_at = ""
+
+    def mark_execution_end(self, chat_id: int, name: str) -> None:
+        """Record that execution has finished (timestamp).
+
+        Does NOT persist on its own — piggybacks on the
+        ``update_after_response`` that follows immediately after.
+        """
+        ns = self._sessions.get((chat_id, name))
+        if ns is None:
+            return
+        ns.finished_at = datetime.now(UTC).isoformat()
