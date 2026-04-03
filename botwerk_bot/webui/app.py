@@ -6,16 +6,20 @@ import logging
 import secrets
 from pathlib import Path
 
-from fastapi import FastAPI
+from fastapi import FastAPI, WebSocket
 from fastapi.responses import JSONResponse
 from starlette.middleware.trustedhost import TrustedHostMiddleware
 from starlette.staticfiles import StaticFiles
 from starlette.types import Receive, Scope, Send
 
+from botwerk_bot.bus.lock_pool import LockPool
 from botwerk_bot.config import WebUIConfig
 from botwerk_bot.webui.auth import get_current_user
+from botwerk_bot.webui.chat_service import ChatService
 from botwerk_bot.webui.routes.agent_routes import create_agent_router
 from botwerk_bot.webui.routes.auth_routes import create_auth_router
+from botwerk_bot.webui.routes.message_routes import create_message_router
+from botwerk_bot.webui.websocket import ChatWebSocket
 
 logger = logging.getLogger(__name__)
 
@@ -36,11 +40,16 @@ class SPAStaticFiles(StaticFiles):
             await super().__call__(scope, receive, send)
 
 
-def create_webui_app(config: WebUIConfig) -> FastAPI:
+def create_webui_app(
+    config: WebUIConfig,
+    chat_service: ChatService | None = None,
+) -> FastAPI:
     """Build the WebUI FastAPI application from config.
 
     The secret_key is auto-generated if not provided (ephemeral — tokens
     will not survive restarts unless a key is persisted in config).
+
+    Pass a ``ChatService`` to enable the WebSocket chat endpoint.
     """
     secret_key = config.secret_key or secrets.token_urlsafe(32)
     if not config.secret_key:
@@ -55,6 +64,11 @@ def create_webui_app(config: WebUIConfig) -> FastAPI:
         redoc_url=None,
         openapi_url=None,
     )
+
+    # Store references on app.state for access from WebSocket handler / tests.
+    app.state.chat_service = chat_service or ChatService()
+    app.state.secret_key = secret_key
+    app.state.lock_pool = LockPool()
 
     # -- Proxy headers middleware ------------------------------------------
 
@@ -77,6 +91,7 @@ def create_webui_app(config: WebUIConfig) -> FastAPI:
         create_auth_router(secret_key, auth_dep, secure_cookies=config.behind_proxy)
     )
     api_app.include_router(create_agent_router(auth_dep))
+    api_app.include_router(create_message_router(auth_dep))
 
     app.mount("/api", api_app)
 
@@ -85,6 +100,18 @@ def create_webui_app(config: WebUIConfig) -> FastAPI:
     @app.get("/health")
     async def health() -> JSONResponse:
         return JSONResponse({"status": "ok", "service": "webui"})
+
+    # -- WebSocket endpoint ------------------------------------------------
+
+    @app.websocket("/ws/chat")
+    async def ws_chat(websocket: WebSocket) -> None:
+        handler = ChatWebSocket(
+            chat_service=app.state.chat_service,
+            session_factory=app.state.session_factory,
+            secret_key=app.state.secret_key,
+            lock_pool=app.state.lock_pool,
+        )
+        await handler.handle(websocket)
 
     # -- SPA static file serving -------------------------------------------
 

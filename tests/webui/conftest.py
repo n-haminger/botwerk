@@ -57,6 +57,9 @@ def webui_app(db_engine):
         if hasattr(route, "app") and hasattr(route.app, "dependency_overrides"):
             route.app.dependency_overrides[get_db] = _override_get_db
 
+    # Set session_factory on app.state for WebSocket handler.
+    app.state.session_factory = factory
+
     return app
 
 

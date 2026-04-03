@@ -61,3 +61,20 @@ export async function getMe(): Promise<User> {
 export async function getAgents(): Promise<Agent[]> {
 	return request<Agent[]>("/api/agents");
 }
+
+export interface MessageRecord {
+	id: number;
+	role: string;
+	content: string;
+	created_at: string;
+}
+
+export async function getMessages(
+	agentName: string,
+	beforeId?: number,
+	limit = 50,
+): Promise<MessageRecord[]> {
+	const params = new URLSearchParams({ limit: String(limit) });
+	if (beforeId !== undefined) params.set("before_id", String(beforeId));
+	return request<MessageRecord[]>(`/api/messages/${agentName}?${params}`);
+}
