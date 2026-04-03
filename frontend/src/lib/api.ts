@@ -221,3 +221,122 @@ export function getFileUrl(fileId: number): string {
 export function getThumbnailUrl(fileId: number): string {
 	return `/api/files/${fileId}?thumbnail=true`;
 }
+
+// -- Explorer API -------------------------------------------------------------
+
+export interface FileEntry {
+	name: string;
+	type: "file" | "dir" | "symlink";
+	size: number;
+	permissions: string;
+	modified_at: number;
+}
+
+export async function explorerList(path: string, user: string): Promise<FileEntry[]> {
+	const params = new URLSearchParams({ path, user });
+	return request<FileEntry[]>(`/api/explorer/list?${params}`);
+}
+
+export async function explorerRead(
+	path: string,
+	user: string,
+): Promise<{ content: string; path: string; size: number }> {
+	const params = new URLSearchParams({ path, user });
+	return request<{ content: string; path: string; size: number }>(`/api/explorer/read?${params}`);
+}
+
+export async function explorerWrite(
+	path: string,
+	user: string,
+	content: string,
+): Promise<{ status: string; path: string }> {
+	return request<{ status: string; path: string }>("/api/explorer/write", {
+		method: "PUT",
+		body: JSON.stringify({ path, user, content }),
+	});
+}
+
+export async function explorerMkdir(
+	path: string,
+	user: string,
+): Promise<{ status: string; path: string }> {
+	return request<{ status: string; path: string }>("/api/explorer/mkdir", {
+		method: "POST",
+		body: JSON.stringify({ path, user }),
+	});
+}
+
+export async function explorerDelete(
+	path: string,
+	user: string,
+): Promise<{ status: string; path: string }> {
+	return request<{ status: string; path: string }>("/api/explorer/delete", {
+		method: "DELETE",
+		body: JSON.stringify({ path, user }),
+	});
+}
+
+export function explorerDownloadUrl(path: string, user: string): string {
+	const params = new URLSearchParams({ path, user });
+	return `/api/explorer/download?${params}`;
+}
+
+// -- Status API ---------------------------------------------------------------
+
+export interface SystemStatus {
+	cpu: { percent: number; count: number };
+	memory: { total: number; used: number; available: number; percent: number };
+	disk: { total: number; used: number; free: number; percent: number };
+	uptime_seconds: number;
+}
+
+export interface AgentStatus {
+	name: string;
+	agent_type: string;
+	linux_user: string;
+	status: string;
+	pid: number | null;
+	cpu_percent: number;
+	memory_mb: number;
+}
+
+export interface ServiceStatus {
+	service: string;
+	active_state: string;
+	raw_output: string;
+}
+
+export async function getSystemStatus(): Promise<SystemStatus> {
+	return request<SystemStatus>("/api/status/system");
+}
+
+export async function getAgentStatuses(): Promise<AgentStatus[]> {
+	return request<AgentStatus[]>("/api/status/agents");
+}
+
+export async function getServiceStatus(): Promise<ServiceStatus> {
+	return request<ServiceStatus>("/api/status/service");
+}
+
+export async function restartAgent(name: string): Promise<{ status: string; agent: string }> {
+	return request<{ status: string; agent: string }>(`/api/status/restart-agent/${name}`, {
+		method: "POST",
+	});
+}
+
+export async function restartBotwerk(): Promise<{ status: string }> {
+	return request<{ status: string }>("/api/status/restart-botwerk", { method: "POST" });
+}
+
+// -- Linux Users API ----------------------------------------------------------
+
+export interface LinuxUser {
+	username: string;
+	uid: number;
+	groups: string[];
+	home: string;
+}
+
+export async function getLinuxUsers(): Promise<LinuxUser[]> {
+	return request<LinuxUser[]>("/api/explorer/users");
+}

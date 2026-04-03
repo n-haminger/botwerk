@@ -18,8 +18,11 @@ from botwerk_bot.webui.auth import get_current_user
 from botwerk_bot.webui.chat_service import ChatService
 from botwerk_bot.webui.routes.agent_routes import create_agent_router
 from botwerk_bot.webui.routes.auth_routes import create_auth_router
+from botwerk_bot.webui.routes.explorer_routes import create_explorer_router
 from botwerk_bot.webui.routes.file_routes import create_file_router
 from botwerk_bot.webui.routes.message_routes import create_message_router
+from botwerk_bot.webui.routes.status_routes import create_status_router
+from botwerk_bot.webui.terminal import TerminalWebSocket
 from botwerk_bot.webui.websocket import ChatWebSocket
 
 logger = logging.getLogger(__name__)
@@ -99,6 +102,12 @@ def create_webui_app(
     effective_upload_dir = upload_dir or Path.home() / ".botwerk" / "webui_uploads"
     api_app.include_router(create_file_router(auth_dep, effective_upload_dir))
 
+    # File explorer routes (sudo-based).
+    api_app.include_router(create_explorer_router(auth_dep))
+
+    # System status routes.
+    api_app.include_router(create_status_router(auth_dep))
+
     app.mount("/api", api_app)
 
     # -- Health endpoint ---------------------------------------------------
@@ -107,7 +116,7 @@ def create_webui_app(
     async def health() -> JSONResponse:
         return JSONResponse({"status": "ok", "service": "webui"})
 
-    # -- WebSocket endpoint ------------------------------------------------
+    # -- WebSocket endpoints -----------------------------------------------
 
     @app.websocket("/ws/chat")
     async def ws_chat(websocket: WebSocket) -> None:
@@ -117,6 +126,11 @@ def create_webui_app(
             secret_key=app.state.secret_key,
             lock_pool=app.state.lock_pool,
         )
+        await handler.handle(websocket)
+
+    @app.websocket("/ws/terminal")
+    async def ws_terminal(websocket: WebSocket) -> None:
+        handler = TerminalWebSocket(secret_key=app.state.secret_key)
         await handler.handle(websocket)
 
     # -- SPA static file serving -------------------------------------------

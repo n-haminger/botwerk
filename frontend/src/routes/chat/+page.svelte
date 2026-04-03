@@ -101,6 +101,15 @@
 			{#if auth.user}
 				<div class="flex items-center gap-2">
 					{#if auth.user.is_admin}
+						<a href="{base}/terminal">
+							<Button variant="ghost" size="sm" class="text-zinc-400">Terminal</Button>
+						</a>
+						<a href="{base}/files">
+							<Button variant="ghost" size="sm" class="text-zinc-400">Files</Button>
+						</a>
+						<a href="{base}/status">
+							<Button variant="ghost" size="sm" class="text-zinc-400">Status</Button>
+						</a>
 						<a href="{base}/agents">
 							<Button variant="ghost" size="sm" class="text-zinc-400">Agents</Button>
 						</a>
