@@ -9,8 +9,7 @@ from dataclasses import dataclass
 class SessionKey:
     """Composite session identifier: chat + optional topic/channel.
 
-    For Telegram forum topics, ``topic_id`` is ``message_thread_id``.
-    For the WebSocket API, ``topic_id`` maps to ``channel_id``.
+    ``topic_id`` maps to ``channel_id`` for the WebSocket/WebUI API.
     When ``topic_id`` is ``None``, this is a flat (legacy) session key.
     """
 

@@ -40,7 +40,7 @@ def _setup_framework(fw_root: Path) -> None:
     inner.mkdir()
     (inner / "CLAUDE.md").write_text("# Framework CLAUDE.md")
 
-    for subdir in ("memory_system", "cron_tasks", "output_to_user", "telegram_files"):
+    for subdir in ("memory_system", "cron_tasks", "output_to_user", "media_files"):
         d = inner / subdir
         d.mkdir()
         (d / "CLAUDE.md").write_text(f"# {subdir}")

@@ -7,6 +7,8 @@ from collections.abc import AsyncGenerator
 from contextlib import asynccontextmanager
 from unittest.mock import AsyncMock, MagicMock, patch
 
+import httpx
+
 from botwerk_bot.infra.version import (
     VersionInfo,
     _parse_version,
@@ -62,39 +64,37 @@ class TestGetCurrentVersion:
             assert get_current_version() == "0.0.0"
 
 
-def _mock_github_session(
+def _mock_httpx_client(
     *, status: int = 200, json_data: dict | None = None, error: Exception | None = None
 ) -> MagicMock:
-    """Build a mock aiohttp.ClientSession for GitHub API tests."""
+    """Build a mock httpx.AsyncClient for GitHub API tests."""
     resp = MagicMock()
-    resp.status = status
-    resp.json = AsyncMock(return_value=json_data or {})
+    resp.status_code = status
+    resp.json = MagicMock(return_value=json_data or {})
+
+    mock_client = MagicMock()
+
+    if error:
+        mock_client.get = AsyncMock(side_effect=error)
+    else:
+        mock_client.get = AsyncMock(return_value=resp)
 
     @asynccontextmanager
-    async def mock_get(*_args: object, **_kwargs: object) -> AsyncGenerator[MagicMock, None]:
-        if error:
-            raise error
-        yield resp
+    async def mock_client_cm(**_kwargs: object) -> AsyncGenerator[MagicMock, None]:
+        yield mock_client
 
-    session = MagicMock()
-    session.get = mock_get
-
-    @asynccontextmanager
-    async def mock_session_cm(**_kwargs: object) -> AsyncGenerator[MagicMock, None]:
-        yield session
-
-    return mock_session_cm
+    return mock_client_cm
 
 
 class TestCheckGithubReleases:
     """Test GitHub Releases API response handling."""
 
     async def test_returns_version_info_when_update_available(self) -> None:
-        mock = _mock_github_session(json_data={"tag_name": "v2.0.0", "name": "Release 2.0.0"})
+        mock = _mock_httpx_client(json_data={"tag_name": "v2.0.0", "name": "Release 2.0.0"})
 
         with (
             patch("botwerk_bot.infra.version.get_current_version", return_value="1.0.0"),
-            patch("botwerk_bot.infra.version.aiohttp.ClientSession", mock),
+            patch("botwerk_bot.infra.version.httpx.AsyncClient", mock),
         ):
             result = await check_github_releases()
 
@@ -105,11 +105,11 @@ class TestCheckGithubReleases:
         assert result.summary == "Release 2.0.0"
 
     async def test_no_update_when_same_version(self) -> None:
-        mock = _mock_github_session(json_data={"tag_name": "v1.0.0", "name": "Current"})
+        mock = _mock_httpx_client(json_data={"tag_name": "v1.0.0", "name": "Current"})
 
         with (
             patch("botwerk_bot.infra.version.get_current_version", return_value="1.0.0"),
-            patch("botwerk_bot.infra.version.aiohttp.ClientSession", mock),
+            patch("botwerk_bot.infra.version.httpx.AsyncClient", mock),
         ):
             result = await check_github_releases()
 
@@ -117,37 +117,35 @@ class TestCheckGithubReleases:
         assert result.update_available is False
 
     async def test_returns_none_on_http_error(self) -> None:
-        mock = _mock_github_session(status=500)
+        mock = _mock_httpx_client(status=500)
 
-        with patch("botwerk_bot.infra.version.aiohttp.ClientSession", mock):
+        with patch("botwerk_bot.infra.version.httpx.AsyncClient", mock):
             result = await check_github_releases()
 
         assert result is None
 
     async def test_returns_none_on_network_error(self) -> None:
-        import aiohttp
+        mock = _mock_httpx_client(error=httpx.HTTPError("connection failed"))
 
-        mock = _mock_github_session(error=aiohttp.ClientError())
-
-        with patch("botwerk_bot.infra.version.aiohttp.ClientSession", mock):
+        with patch("botwerk_bot.infra.version.httpx.AsyncClient", mock):
             result = await check_github_releases()
 
         assert result is None
 
     async def test_returns_none_on_missing_tag(self) -> None:
-        mock = _mock_github_session(json_data={})
+        mock = _mock_httpx_client(json_data={})
 
-        with patch("botwerk_bot.infra.version.aiohttp.ClientSession", mock):
+        with patch("botwerk_bot.infra.version.httpx.AsyncClient", mock):
             result = await check_github_releases()
 
         assert result is None
 
     async def test_strips_v_prefix_from_tag(self) -> None:
-        mock = _mock_github_session(json_data={"tag_name": "v3.1.0", "name": ""})
+        mock = _mock_httpx_client(json_data={"tag_name": "v3.1.0", "name": ""})
 
         with (
             patch("botwerk_bot.infra.version.get_current_version", return_value="1.0.0"),
-            patch("botwerk_bot.infra.version.aiohttp.ClientSession", mock),
+            patch("botwerk_bot.infra.version.httpx.AsyncClient", mock),
         ):
             result = await check_github_releases()
 
@@ -164,34 +162,32 @@ class TestFetchChangelog:
     """Test GitHub Releases changelog fetching."""
 
     async def test_returns_body_for_v_prefixed_tag(self) -> None:
-        mock = _mock_github_session(json_data={"body": "## What's new\n\n- Feature A"})
-        with patch("botwerk_bot.infra.version.aiohttp.ClientSession", mock):
+        mock = _mock_httpx_client(json_data={"body": "## What's new\n\n- Feature A"})
+        with patch("botwerk_bot.infra.version.httpx.AsyncClient", mock):
             result = await fetch_changelog("1.0.0")
         assert result is not None
         assert "Feature A" in result
 
     async def test_returns_none_on_404(self) -> None:
-        mock = _mock_github_session(status=404)
-        with patch("botwerk_bot.infra.version.aiohttp.ClientSession", mock):
+        mock = _mock_httpx_client(status=404)
+        with patch("botwerk_bot.infra.version.httpx.AsyncClient", mock):
             result = await fetch_changelog("99.0.0")
         assert result is None
 
     async def test_returns_none_on_network_error(self) -> None:
-        import aiohttp
-
-        mock = _mock_github_session(error=aiohttp.ClientError())
-        with patch("botwerk_bot.infra.version.aiohttp.ClientSession", mock):
+        mock = _mock_httpx_client(error=httpx.HTTPError("connection failed"))
+        with patch("botwerk_bot.infra.version.httpx.AsyncClient", mock):
             result = await fetch_changelog("1.0.0")
         assert result is None
 
     async def test_returns_none_on_empty_body(self) -> None:
-        mock = _mock_github_session(json_data={"body": ""})
-        with patch("botwerk_bot.infra.version.aiohttp.ClientSession", mock):
+        mock = _mock_httpx_client(json_data={"body": ""})
+        with patch("botwerk_bot.infra.version.httpx.AsyncClient", mock):
             result = await fetch_changelog("1.0.0")
         assert result is None
 
     async def test_strips_whitespace(self) -> None:
-        mock = _mock_github_session(json_data={"body": "  changelog text  \n\n"})
-        with patch("botwerk_bot.infra.version.aiohttp.ClientSession", mock):
+        mock = _mock_httpx_client(json_data={"body": "  changelog text  \n\n"})
+        with patch("botwerk_bot.infra.version.httpx.AsyncClient", mock):
             result = await fetch_changelog("1.0.0")
         assert result == "changelog text"

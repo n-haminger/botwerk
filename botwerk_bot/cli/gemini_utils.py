@@ -118,7 +118,7 @@ def create_system_prompt_file(
     """Write system prompt to a temp file, return path. Caller must clean up.
 
     When *directory* is set the temp file is placed there instead of the
-    system default (useful for Docker mounts like ``~/.botwerk/tmp``).
+    system default.
     """
     content = system_prompt
     if append_prompt:

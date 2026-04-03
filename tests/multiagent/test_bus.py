@@ -329,7 +329,7 @@ class TestBusNotifyRecipient:
         """Notification is sent via notification_service.notify() to the first user."""
         bus = InterAgentBus()
         stack = _make_stack()
-        stack.config.allowed_user_ids = [12345]
+        stack.config.api.chat_id = 12345
         mock_ns = AsyncMock()
         stack.bot.notification_service = mock_ns
         bus.register("target", stack)
@@ -350,11 +350,11 @@ class TestBusNotifyRecipient:
         assert "main" in call_args[0][1]  # sender name in text
         assert "ia-main" in call_args[0][1]  # session name in text
 
-    async def test_notify_broadcasts_when_no_users(self) -> None:
-        """When no allowed_user_ids, notify_all() is used instead."""
+    async def test_notify_defaults_to_chat_id_1_when_unset(self) -> None:
+        """When api.chat_id is 0, defaults to chat_id=1."""
         bus = InterAgentBus()
         stack = _make_stack()
-        stack.config.allowed_user_ids = []
+        stack.config.api.chat_id = 0
         mock_ns = AsyncMock()
         stack.bot.notification_service = mock_ns
         bus.register("target", stack)
@@ -369,14 +369,15 @@ class TestBusNotifyRecipient:
         )
 
         await bus._notify_recipient(task)
-        mock_ns.notify.assert_not_awaited()
-        mock_ns.notify_all.assert_awaited_once()
+        mock_ns.notify.assert_awaited_once()
+        call_args = mock_ns.notify.call_args
+        assert call_args[0][0] == 1  # defaults to chat_id 1
 
     async def test_notify_skipped_when_no_service(self) -> None:
         """Notification is silently skipped when notification_service is None."""
         bus = InterAgentBus()
         stack = _make_stack()
-        stack.config.allowed_user_ids = [12345]
+        stack.config.api.chat_id = 12345
         stack.bot.notification_service = None
         bus.register("target", stack)
 
@@ -396,7 +397,7 @@ class TestBusNotifyRecipient:
         """Notification errors are swallowed (best-effort)."""
         bus = InterAgentBus()
         stack = _make_stack()
-        stack.config.allowed_user_ids = [99]
+        stack.config.api.chat_id = 99
         mock_ns = AsyncMock()
         mock_ns.notify = AsyncMock(side_effect=RuntimeError("network error"))
         stack.bot.notification_service = mock_ns

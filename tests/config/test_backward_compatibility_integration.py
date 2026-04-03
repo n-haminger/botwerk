@@ -17,8 +17,6 @@ def test_old_config_loads_with_new_defaults(tmp_path: Path) -> None:
         "log_level": "DEBUG",
         "provider": "claude",
         "model": "sonnet",
-        "telegram_token": "test-token",
-        "allowed_user_ids": [12345],
         "streaming": {
             "enabled": True,
             "min_chars": 200,
@@ -41,9 +39,6 @@ def test_old_config_loads_with_new_defaults(tmp_path: Path) -> None:
     # User values should be preserved
     assert merged["log_level"] == "DEBUG"
     assert merged["model"] == "sonnet"
-    assert merged["telegram_token"] == "test-token"
-    assert merged["allowed_user_ids"] == [12345]
-
     # Should be able to parse into AgentConfig
     config = AgentConfig(**merged)
     assert config.log_level == "DEBUG"
@@ -94,8 +89,6 @@ def test_config_with_all_new_fields_needs_no_merge(tmp_path: Path) -> None:
             "claude": ["--fast"],
             "codex": ["--verbose"],
         },
-        "telegram_token": "test-token",
-        "allowed_user_ids": [12345],
     }
 
     config_path.write_text(json.dumps(complete_config, indent=2))

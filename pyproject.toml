@@ -5,14 +5,14 @@ build-backend = "hatchling.build"
 [project]
 name = "botwerk"
 version = "1.4.1"
-description = "Control Claude Code and Codex CLI from Telegram. Live streaming, sessions, cron jobs, webhooks, Docker sandboxing."
+description = "AI agent orchestrator with Web UI. Live streaming, sessions, cron jobs, webhooks."
 readme = "README.md"
 requires-python = ">=3.11"
 license = "MIT"
 license-files = ["LICENSE"]
 authors = [{ name = "PleasePrompto" }]
 keywords = [
-    "botwerk", "ai", "telegram", "bot", "agent",
+    "botwerk", "ai", "agent", "webui",
     "claude", "codex", "cli", "automation", "streaming",
 ]
 classifiers = [
@@ -33,8 +33,10 @@ classifiers = [
 ]
 dependencies = [
     "pydantic>=2.12.5",
-    "aiogram>=3.24.0,<4.0.0",
-    "aiohttp>=3.9.0,<4.0.0",
+    "fastapi>=0.115.0",
+    "uvicorn[standard]>=0.34.0",
+    "httpx>=0.28.0",
+    "python-multipart>=0.0.20",
     "cronsim>=2.7",
     "pyyaml>=6.0.3",
     "rich>=14.3.2",
@@ -47,9 +49,9 @@ dependencies = [
 test = [
     "pytest>=9.0.2",
     "pytest-asyncio>=1.3.0",
-    "pytest-aiohttp>=1.1.0",
     "pytest-cov>=7.0.0",
     "time-machine>=3.2.0",
+    "httpx>=0.28.0",
 ]
 lint = [
     "ruff>=0.15.0",
@@ -58,10 +60,7 @@ lint = [
 api = [
     "PyNaCl>=1.6.2",
 ]
-matrix = [
-    "matrix-nio>=0.25.0",
-]
-dev = ["botwerk[test,lint,api,matrix]"]
+dev = ["botwerk[test,lint,api]"]
 
 [project.urls]
 Homepage = "https://botwerk"
@@ -78,13 +77,11 @@ packages = ["botwerk_bot"]
 
 [tool.hatch.build.targets.wheel.force-include]
 "config.example.json" = "botwerk_bot/_config_example.json"
-"Dockerfile.sandbox" = "botwerk_bot/_Dockerfile.sandbox"
 
 [tool.hatch.build.targets.sdist]
 include = [
     "botwerk_bot/",
     "config.example.json",
-    "Dockerfile.sandbox",
     "LICENSE",
     "README.md",
     "pyproject.toml",
@@ -181,10 +178,6 @@ strict_equality = true
 extra_checks = true
 
 [[tool.mypy.overrides]]
-module = ["aiogram.*"]
-ignore_missing_imports = true
-
-[[tool.mypy.overrides]]
 module = ["cronsim.*"]
 ignore_missing_imports = true
 
@@ -202,10 +195,6 @@ ignore_missing_imports = true
 
 [[tool.mypy.overrides]]
 module = ["nacl.*"]
-ignore_missing_imports = true
-
-[[tool.mypy.overrides]]
-module = ["nio.*"]
 ignore_missing_imports = true
 
 [[tool.mypy.overrides]]

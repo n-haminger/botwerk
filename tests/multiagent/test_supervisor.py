@@ -23,8 +23,6 @@ def main_config(tmp_path: Path) -> AgentConfig:
     """Create a main config with tmp_path as botwerk_home."""
     return AgentConfig(
         botwerk_home=str(tmp_path),
-        telegram_token="main-token",
-        allowed_user_ids=[1],
     )
 
 
@@ -122,7 +120,7 @@ class TestStartAgentByName:
 
     async def test_start_from_registry(self, supervisor: AgentSupervisor, tmp_path: Path) -> None:
         """Agent found in registry is started via _start_sub_agent."""
-        agents_data = [{"name": "sub1", "telegram_token": "tok:1"}]
+        agents_data = [{"name": "sub1"}]
         (tmp_path / "agents.json").write_text(json.dumps(agents_data))
 
         with patch.object(supervisor, "_start_sub_agent", new_callable=AsyncMock) as mock_start:
@@ -148,7 +146,7 @@ class TestRestartAgent:
     async def test_restart_stops_and_starts(
         self, supervisor: AgentSupervisor, tmp_path: Path
     ) -> None:
-        agents_data = [{"name": "sub1", "telegram_token": "tok:1"}]
+        agents_data = [{"name": "sub1"}]
         (tmp_path / "agents.json").write_text(json.dumps(agents_data))
 
         supervisor._stacks["sub1"] = MagicMock()
@@ -167,12 +165,8 @@ class TestRestartAgent:
     async def test_restart_stops_before_start(
         self, supervisor: AgentSupervisor, tmp_path: Path
     ) -> None:
-        """Restart must fully stop the old agent before starting the new one.
-
-        The new bot handles session takeover itself via ``getUpdates(offset=-1)``
-        in ``TelegramBot.run()``, so no artificial delay is needed here.
-        """
-        agents_data = [{"name": "sub1", "telegram_token": "tok:1"}]
+        """Restart must fully stop the old agent before starting the new one."""
+        agents_data = [{"name": "sub1"}]
         (tmp_path / "agents.json").write_text(json.dumps(agents_data))
 
         supervisor._stacks["sub1"] = MagicMock()
@@ -197,7 +191,7 @@ class TestOnAgentsChanged:
     """Test _on_agents_changed() FileWatcher callback."""
 
     async def test_starts_new_agents(self, supervisor: AgentSupervisor, tmp_path: Path) -> None:
-        agents_data = [{"name": "sub1", "telegram_token": "tok:1"}]
+        agents_data = [{"name": "sub1"}]
         (tmp_path / "agents.json").write_text(json.dumps(agents_data))
 
         with patch.object(supervisor, "_start_sub_agent", new_callable=AsyncMock) as mock_start:
@@ -216,18 +210,16 @@ class TestOnAgentsChanged:
 
         mock_stop.assert_called_once_with("sub1")
 
-    async def test_restarts_on_token_change(
+    async def test_restarts_on_config_change(
         self, supervisor: AgentSupervisor, tmp_path: Path
     ) -> None:
-        """When token changes in agents.json, the agent is restarted."""
-        # Current state: sub1 running with old token
+        """When provider/model changes in agents.json, the agent is restarted."""
         old_config = AgentConfig(
-            telegram_token="old-token", botwerk_home=str(tmp_path / "agents/sub1")
+            provider="claude", model="opus", botwerk_home=str(tmp_path / "agents/sub1")
         )
         supervisor._stacks["sub1"] = MagicMock(config=old_config)
 
-        # New agents.json has different token
-        agents_data = [{"name": "sub1", "telegram_token": "new-token"}]
+        agents_data = [{"name": "sub1", "provider": "codex", "model": "gpt-4"}]
         (tmp_path / "agents.json").write_text(json.dumps(agents_data))
 
         with (
@@ -283,13 +275,13 @@ class TestStartSubAgent:
 
     async def test_rejects_main_name(self, supervisor: AgentSupervisor) -> None:
         """Cannot create a sub-agent named 'main'."""
-        sub_cfg = SubAgentConfig(name="main", telegram_token="tok:1")
+        sub_cfg = SubAgentConfig(name="main")
         await supervisor._start_sub_agent(sub_cfg)
         assert "main" not in supervisor._stacks or supervisor._stacks.get("main") is None
 
     async def test_handles_creation_failure(self, supervisor: AgentSupervisor) -> None:
         """If AgentStack.create() fails, sub-agent is not registered."""
-        sub_cfg = SubAgentConfig(name="sub1", telegram_token="tok:1")
+        sub_cfg = SubAgentConfig(name="sub1")
 
         with patch(
             "botwerk_bot.multiagent.supervisor.AgentStack.create",
@@ -298,47 +290,6 @@ class TestStartSubAgent:
             await supervisor._start_sub_agent(sub_cfg)
 
         assert "sub1" not in supervisor._stacks
-
-    async def test_persists_transport_and_matrix_to_config(
-        self, supervisor: AgentSupervisor, tmp_path: Path
-    ) -> None:
-        """On-disk config.json must receive transport + matrix credentials."""
-        from botwerk_bot.multiagent.models import MatrixConfig
-
-        matrix_cfg = MatrixConfig(
-            homeserver="https://matrix.example.com",
-            user_id="@bot:example.com",
-            password="secret",
-            allowed_rooms=["!room:example.com"],
-            allowed_users=["@user:example.com"],
-        )
-        sub_cfg = SubAgentConfig(
-            name="mx1",
-            transport="matrix",
-            matrix=matrix_cfg,
-        )
-
-        agent_home = tmp_path / "agents" / "mx1"
-        config_dir = agent_home / "config"
-        config_dir.mkdir(parents=True)
-        config_path = config_dir / "config.json"
-        config_path.write_text(json.dumps({"transport": "telegram", "matrix": {}}))
-
-        mock_stack = MagicMock()
-        mock_stack.bot = MagicMock()
-        mock_stack.bot.on_async_interagent_result = AsyncMock()
-
-        with patch(
-            "botwerk_bot.multiagent.supervisor.AgentStack.create",
-            new_callable=AsyncMock,
-            return_value=mock_stack,
-        ):
-            await supervisor._start_sub_agent(sub_cfg)
-
-        saved = json.loads(config_path.read_text())
-        assert saved["transport"] == "matrix"
-        assert saved["matrix"]["homeserver"] == "https://matrix.example.com"
-        assert saved["matrix"]["user_id"] == "@bot:example.com"
 
 
 class TestStopAll:
@@ -382,7 +333,7 @@ class TestStopAll:
     async def test_cancellation_unblocks_start(self, supervisor: AgentSupervisor) -> None:
         """Cancelling the supervisor.start() task (simulating SIGINT handler)
         must not hang — CancelledError must propagate from _main_done.wait()
-        so the finally block in run_telegram() can call stop_all()."""
+        so the finally block in run_bot() can call stop_all()."""
         main_stack = MagicMock()
         main_stack.shutdown = AsyncMock()
         main_stack.bot = MagicMock()
@@ -436,7 +387,7 @@ class TestStopAll:
             with pytest.raises(asyncio.CancelledError):
                 await task
 
-        # After CancelledError, the caller (run_telegram) would call stop_all()
+        # After CancelledError, the caller (run_bot) would call stop_all()
         await supervisor.stop_all()
         assert supervisor._running is False
 
@@ -462,7 +413,7 @@ class TestHandleCrash:
         supervisor._health["sub1"] = health
         stack = MagicMock()
         supervisor._stacks["main"] = MagicMock()
-        supervisor._stacks["main"].config.allowed_user_ids = []
+        supervisor._stacks["main"].config.api.chat_id = 0
 
         retry_count = _MAX_RESTART_RETRIES + 1
         _, _, should_return = await supervisor._handle_crash(
@@ -528,12 +479,7 @@ class TestHandleRestartExit:
         assert health.status == "starting"
 
     async def test_sub_restart_shuts_down_before_rebuild(self, supervisor: AgentSupervisor) -> None:
-        """Hot-reload must shut down the old stack before rebuilding.
-
-        Session takeover is handled by the new bot via ``getUpdates(offset=-1)``
-        in ``TelegramBot.run()``, so no sleep delay is needed between
-        shutdown and rebuild.
-        """
+        """Hot-reload must shut down the old stack before rebuilding."""
         health = AgentHealth(name="sub1")
         supervisor._health["sub1"] = health
         stack = MagicMock()

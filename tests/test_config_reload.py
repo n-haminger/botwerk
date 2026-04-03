@@ -63,20 +63,20 @@ class TestClassifyChanges:
         assert restart == []
 
     def test_restart_required(self) -> None:
-        changes = {"telegram_token": ("old", "new"), "docker": ({}, {"enabled": True})}
+        changes = {"api": ({}, {"enabled": True}), "interagent_port": (8799, 9000)}
         hot, restart = classify_changes(changes)
         assert hot == {}
-        assert "telegram_token" in restart
-        assert "docker" in restart
+        assert "api" in restart
+        assert "interagent_port" in restart
 
     def test_mixed(self) -> None:
         changes = {
             "model": ("sonnet", "opus"),
-            "telegram_token": ("old", "new"),
+            "interagent_port": (8799, 9000),
         }
         hot, restart = classify_changes(changes)
         assert "model" in hot
-        assert "telegram_token" in restart
+        assert "interagent_port" in restart
 
     def test_unknown_field_requires_restart(self) -> None:
         changes = {"unknown_future_field": (None, "value")}
@@ -128,7 +128,7 @@ class TestConfigReloader:
         reloader = ConfigReloader(config_path, cfg, on_restart_needed=on_restart)
 
         new_data = cfg.model_dump(mode="json")
-        new_data["telegram_token"] = "new-token-value"
+        new_data["interagent_port"] = 9999
         config_path.write_text(json.dumps(new_data), encoding="utf-8")
 
         # Ensure mtime change is detected (filesystem may have 1s granularity)
@@ -137,7 +137,7 @@ class TestConfigReloader:
         await reloader._check()
         on_restart.assert_called_once()
         fields = on_restart.call_args[0][0]
-        assert "telegram_token" in fields
+        assert "interagent_port" in fields
 
     async def test_invalid_json_no_crash(self, tmp_path: Path) -> None:
         config_path = tmp_path / "config.json"

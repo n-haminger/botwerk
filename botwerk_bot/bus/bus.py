@@ -52,7 +52,7 @@ class MessageBus:
     Usage::
 
         bus = MessageBus()
-        bus.register_transport(TelegramTransport(bot))
+        bus.register_transport(transport_adapter)
         bus.set_injector(orchestrator)
 
         # Any observer callback:

@@ -131,7 +131,5 @@ def setup_logging(
 
     logging.getLogger("httpx").setLevel(logging.WARNING)
     logging.getLogger("httpcore").setLevel(logging.WARNING)
-    logging.getLogger("telegram").setLevel(logging.WARNING)
-    logging.getLogger("telegram.ext").setLevel(logging.WARNING)
 
     logger.info("Logging initialized (level=%s)", logging.getLevelName(level))

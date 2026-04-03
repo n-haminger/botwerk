@@ -1,4 +1,4 @@
-"""Tests for multiagent/commands.py: Telegram command handlers."""
+"""Tests for multiagent/commands.py: command handlers."""
 
 from __future__ import annotations
 

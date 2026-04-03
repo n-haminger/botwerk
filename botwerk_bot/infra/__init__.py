@@ -1,6 +1,5 @@
-"""Infrastructure: PID lock, restart sentinels, Docker management."""
+"""Infrastructure: PID lock, restart sentinels."""
 
-from botwerk_bot.infra.docker import DockerManager
 from botwerk_bot.infra.pidlock import acquire_lock, release_lock
 from botwerk_bot.infra.restart import (
     EXIT_RESTART,
@@ -12,7 +11,6 @@ from botwerk_bot.infra.restart import (
 
 __all__ = [
     "EXIT_RESTART",
-    "DockerManager",
     "acquire_lock",
     "consume_restart_marker",
     "consume_restart_sentinel",

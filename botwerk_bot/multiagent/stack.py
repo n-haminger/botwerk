@@ -53,11 +53,10 @@ class AgentStack:
         bot = create_bot(config, agent_name=name)
 
         logger.info(
-            "AgentStack created: name=%s home=%s main=%s transport=%s",
+            "AgentStack created: name=%s home=%s main=%s",
             name,
             paths.botwerk_home,
             is_main,
-            config.transport,
         )
         return cls(name=name, config=config, paths=paths, bot=bot, is_main=is_main)
 

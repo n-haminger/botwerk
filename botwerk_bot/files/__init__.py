@@ -1,1 +1,1 @@
-"""Shared file handling utilities used by both Telegram bot and API server."""
+"""Shared file handling utilities used by the bot and API server."""

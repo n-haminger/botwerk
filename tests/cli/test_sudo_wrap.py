@@ -74,19 +74,7 @@ class TestWrapCommand:
         assert result_cmd == cmd
         assert cwd == "/workspace"
 
-    def test_docker_takes_precedence(self) -> None:
-        cmd = ["claude", "-p", "hello"]
-        cfg = CLIConfig(
-            docker_container="sandbox",
-            linux_user="botwerk-test",
-            working_dir="/workspace",
-            chat_id=1,
-        )
-        result_cmd, cwd = wrap_command(cmd, cfg)
-        assert result_cmd[0] == "docker"
-        assert cwd is None
-
-    def test_sudo_when_no_docker(self) -> None:
+    def test_sudo_when_linux_user_set(self) -> None:
         cmd = ["claude", "-p", "hello"]
         cfg = CLIConfig(
             linux_user="botwerk-codex",
@@ -96,22 +84,13 @@ class TestWrapCommand:
         assert result_cmd[0] == "sudo"
         assert cwd == "/workspace"
 
-    def test_interactive_forwarded_to_docker(self) -> None:
-        cmd = ["gemini"]
-        cfg = CLIConfig(
-            docker_container="sandbox",
-            working_dir="/workspace",
-            chat_id=1,
-        )
-        result_cmd, _ = wrap_command(cmd, cfg, interactive=True)
-        assert "-i" in result_cmd
-
     def test_extra_env_forwarded(self) -> None:
         cmd = ["gemini"]
         cfg = CLIConfig(
-            docker_container="sandbox",
+            linux_user="botwerk-test",
             working_dir="/workspace",
-            chat_id=1,
         )
         result_cmd, _ = wrap_command(cmd, cfg, extra_env={"FOO": "bar"})
-        assert "FOO=bar" in result_cmd
+        preserve = [a for a in result_cmd if a.startswith("--preserve-env=")]
+        preserved_vars = preserve[0].split("=", 1)[1]
+        assert "FOO" in preserved_vars

@@ -82,7 +82,6 @@ class CLIConfig:
     allowed_tools: list[str] = field(default_factory=list)
     disallowed_tools: list[str] = field(default_factory=list)
     permission_mode: str = "bypassPermissions"
-    docker_container: str = ""
     # Codex-specific fields (ignored by Claude provider):
     sandbox_mode: str = "read-only"
     images: list[str] = field(default_factory=list)
@@ -103,100 +102,6 @@ class CLIConfig:
     agent_secret: str = ""
     # Linux user isolation:
     linux_user: str = ""
-
-
-_CONTAINER_BOTWERK_MOUNT = "/botwerk"
-
-
-def _to_container_path(host_path: Path, main_home: Path) -> str:
-    """Map a host path under *main_home* to its container equivalent.
-
-    The Docker container mounts the root botwerk home at ``/botwerk``.
-    """
-    rel = host_path.relative_to(main_home)
-    if str(rel) == ".":
-        return _CONTAINER_BOTWERK_MOUNT
-    return f"{_CONTAINER_BOTWERK_MOUNT}/{rel.as_posix()}"
-
-
-def docker_wrap(
-    cmd: list[str],
-    config: CLIConfig,
-    *,
-    extra_env: dict[str, str] | None = None,
-    interactive: bool = False,
-) -> tuple[list[str], str | None]:
-    """Wrap a CLI command for Docker execution if a container is set.
-
-    *interactive* adds ``-i`` to keep stdin open (required for providers
-    that pipe the prompt via stdin, e.g. Gemini).
-
-    *extra_env* vars are injected as ``-e`` flags into ``docker exec``
-    (set **inside** the container, unlike ``env=`` on the host process).
-    """
-    if config.docker_container:
-        logger.debug("docker_wrap container=%s", config.docker_container)
-        stdin_flag: list[str] = ["-i"] if interactive else []
-        working_dir = Path(config.working_dir)
-        botwerk_home = working_dir.parent if working_dir.name == "workspace" else working_dir
-
-        # Resolve root botwerk home for host → container path mapping.
-        # Sub-agents live at <root>/agents/<name>/; the Docker mount is the root.
-        main_home = botwerk_home
-        if main_home.parent.name == "agents":
-            main_home = main_home.parent.parent
-
-        container_cwd = _to_container_path(working_dir, main_home)
-        container_home = _to_container_path(botwerk_home, main_home)
-        container_shared = _to_container_path(main_home / "SHAREDMEMORY.md", main_home)
-
-        # Merge user secrets from .env (low priority — never override).
-        import os
-
-        from botwerk_bot.infra.env_secrets import load_env_secrets
-
-        merged_extra = dict(load_env_secrets(main_home / ".env"))
-        # Remove keys already in host env (subprocess inherits docker binary env).
-        for key in list(merged_extra):
-            if key in os.environ:
-                del merged_extra[key]
-        if extra_env:
-            merged_extra.update(extra_env)  # Provider-specific overrides win.
-        extra_env = merged_extra or None
-
-        env_flags: list[str] = [
-            "-e",
-            f"BOTWERK_CHAT_ID={config.chat_id}",
-            "-e",
-            f"BOTWERK_AGENT_NAME={config.agent_name}",
-            "-e",
-            f"BOTWERK_INTERAGENT_PORT={config.interagent_port}",
-            "-e",
-            f"BOTWERK_HOME={container_home}",
-            "-e",
-            f"BOTWERK_SHARED_MEMORY_PATH={container_shared}",
-            "-e",
-            "BOTWERK_INTERAGENT_HOST=host.docker.internal",
-        ]
-        if config.topic_id:
-            env_flags += ["-e", f"BOTWERK_TOPIC_ID={config.topic_id}"]
-        if extra_env:
-            for key, value in extra_env.items():
-                env_flags += ["-e", f"{key}={value}"]
-        return (
-            [
-                "docker",
-                "exec",
-                *stdin_flag,
-                "-w",
-                container_cwd,
-                *env_flags,
-                config.docker_container,
-                *cmd,
-            ],
-            None,
-        )
-    return cmd, str(Path(config.working_dir).resolve())
 
 
 # ---------------------------------------------------------------------------
@@ -233,7 +138,7 @@ def sudo_wrap(
 ) -> tuple[list[str], str | None]:
     """Wrap a CLI command for execution as a different Linux user via sudo.
 
-    Mirrors ``docker_wrap()``: when ``config.linux_user`` is set, the command
+    When ``config.linux_user`` is set, the command
     is prefixed with ``sudo -nu <user> --preserve-env=... --``.
 
     Returns ``(wrapped_cmd, resolved_cwd)``.
@@ -290,17 +195,8 @@ def wrap_command(
     config: CLIConfig,
     *,
     extra_env: dict[str, str] | None = None,
-    interactive: bool = False,
 ) -> tuple[list[str], str | None]:
-    """Dispatch to ``docker_wrap`` or ``sudo_wrap`` based on config.
-
-    Docker and Linux user isolation are mutually exclusive.
-    Docker takes precedence if both are configured.
-    """
-    if config.docker_container:
-        if config.linux_user:
-            logger.warning("Both docker_container and linux_user set; docker takes precedence")
-        return docker_wrap(cmd, config, extra_env=extra_env, interactive=interactive)
+    """Dispatch to ``sudo_wrap`` when Linux user isolation is configured."""
     if config.linux_user:
         return sudo_wrap(cmd, config, extra_env=extra_env)
     return cmd, str(Path(config.working_dir).resolve())

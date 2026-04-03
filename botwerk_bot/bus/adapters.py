@@ -27,20 +27,19 @@ def from_background_result(result: BackgroundResult) -> Envelope:
     return Envelope(
         origin=Origin.BACKGROUND,
         chat_id=result.chat_id,
+        topic_id=result.thread_id,
         prompt_preview=result.prompt_preview,
         result_text=result.result_text,
         status=result.status,
         is_error=result.status.startswith("error:"),
         delivery=DeliveryMode.UNICAST,
         lock_mode=LockMode.NONE,
-        reply_to_message_id=result.message_id,
-        thread_id=result.thread_id,
         elapsed_seconds=result.elapsed_seconds,
         provider=result.provider,
         model=result.model,
         session_name=result.session_name,
         session_id=result.session_id,
-        metadata={"task_id": result.task_id},
+        metadata={"task_id": result.task_id, "message_id": result.message_id},
     )
 
 

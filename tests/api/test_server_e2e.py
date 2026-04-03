@@ -1,12 +1,13 @@
 """Integration tests for E2E encrypted WebSocket protocol.
 
 Tests the real handshake, key exchange, and encrypted message flow
-using an actual aiohttp server + WebSocket client.  No mocking of
+using FastAPI's built-in WebSocket test support.  No mocking of
 crypto primitives -- all encryption/decryption is real.
 """
 
 from __future__ import annotations
 
+import asyncio
 import base64
 import json
 from pathlib import Path
@@ -18,9 +19,10 @@ import pytest
 
 pytest.importorskip("nacl", reason="PyNaCl not installed (optional: pip install botwerk[api])")
 
-from aiohttp import WSMsgType, web
-from aiohttp.test_utils import TestClient, TestServer
+from httpx import ASGITransport, AsyncClient
 from nacl.exceptions import CryptoError
+from starlette.testclient import TestClient
+from starlette.websockets import WebSocketDisconnect
 
 from botwerk_bot.api.crypto import E2ESession
 from botwerk_bot.api.server import ApiServer
@@ -62,38 +64,30 @@ def _make_server(
     return server
 
 
-def _build_app(server: ApiServer) -> web.Application:
-    app = web.Application(client_max_size=50 * 1024 * 1024)
-    app.router.add_get("/ws", server._handle_websocket)
-    app.router.add_get("/health", server._handle_health)
-    return app
-
-
-async def _do_handshake(
+def _do_handshake_sync(
     ws: Any,
     token: str = _DEFAULT_TOKEN,
     chat_id: int | None = None,
 ) -> tuple[E2ESession, dict[str, Any]]:
-    """Perform E2E handshake.  Returns (client_e2e, auth_ok_data)."""
+    """Perform E2E handshake (sync, for starlette TestClient).  Returns (client_e2e, auth_ok_data)."""
     client = E2ESession()
     auth_msg: dict[str, Any] = {"type": "auth", "token": token, "e2e_pk": client.local_pk_b64}
     if chat_id is not None:
         auth_msg["chat_id"] = chat_id
-    await ws.send_json(auth_msg)
-    resp = await ws.receive_json()
+    ws.send_json(auth_msg)
+    resp = ws.receive_json()
     assert resp["type"] == "auth_ok"
     client.set_remote_key(resp["e2e_pk"])
     return client, resp
 
 
-async def _send_encrypted(ws: Any, e2e: E2ESession, data: dict[str, Any]) -> None:
-    await ws.send_str(e2e.encrypt(data))
+def _send_encrypted_sync(ws: Any, e2e: E2ESession, data: dict[str, Any]) -> None:
+    ws.send_text(e2e.encrypt(data))
 
 
-async def _recv_encrypted(ws: Any, e2e: E2ESession) -> dict[str, Any]:
-    msg = await ws.receive()
-    assert msg.type == WSMsgType.TEXT
-    return e2e.decrypt(msg.data)
+def _recv_encrypted_sync(ws: Any, e2e: E2ESession) -> dict[str, Any]:
+    text = ws.receive_text()
+    return e2e.decrypt(text)
 
 
 # ---------------------------------------------------------------------------
@@ -102,15 +96,9 @@ async def _recv_encrypted(ws: Any, e2e: E2ESession) -> dict[str, Any]:
 
 
 @pytest.fixture
-async def api_ws(tmp_path: Path):
-    """Yield (aiohttp_client, api_server) for WebSocket tests."""
-    server = _make_server(tmp_path)
-    app = _build_app(server)
-    srv = TestServer(app)
-    client = TestClient(srv)
-    await client.start_server()
-    yield client, server
-    await client.close()
+def api_server(tmp_path: Path) -> ApiServer:
+    """Return an ApiServer for WebSocket tests."""
+    return _make_server(tmp_path)
 
 
 # ---------------------------------------------------------------------------
@@ -119,21 +107,17 @@ async def api_ws(tmp_path: Path):
 
 
 class TestE2EHandshake:
-    async def test_successful_handshake(self, api_ws: tuple[TestClient, ApiServer]) -> None:
-        client, _ = api_ws
-        ws = await client.ws_connect("/ws")
-        _e2e, resp = await _do_handshake(ws)
-        assert resp["chat_id"] == 42
-        assert "e2e_pk" in resp
-        pk_bytes = base64.b64decode(resp["e2e_pk"])
-        assert len(pk_bytes) == 32
-        await ws.close()
+    def test_successful_handshake(self, api_server: ApiServer) -> None:
+        client = TestClient(api_server._app)
+        with client.websocket_connect("/ws") as ws:
+            _e2e, resp = _do_handshake_sync(ws)
+            assert resp["chat_id"] == 42
+            assert "e2e_pk" in resp
+            pk_bytes = base64.b64decode(resp["e2e_pk"])
+            assert len(pk_bytes) == 32
 
-    async def test_auth_ok_includes_providers(
-        self,
-        api_ws: tuple[TestClient, ApiServer],
-    ) -> None:
-        client, server = api_ws
+    def test_auth_ok_includes_providers(self, tmp_path: Path) -> None:
+        server = _make_server(tmp_path)
         server.set_provider_info(
             [
                 {
@@ -145,70 +129,63 @@ class TestE2EHandshake:
             ]
         )
         server.set_active_state_getter(lambda: ("sonnet", "claude"))
-        ws = await client.ws_connect("/ws")
-        _e2e, resp = await _do_handshake(ws)
-        assert resp["providers"] == [
-            {
-                "id": "claude",
-                "name": "Claude Code",
-                "color": "#F97316",
-                "models": ["haiku", "sonnet", "opus"],
-            },
-        ]
-        assert resp["active_provider"] == "sonnet"
-        assert resp["active_model"] == "claude"
-        await ws.close()
+        client = TestClient(server._app)
+        with client.websocket_connect("/ws") as ws:
+            _e2e, resp = _do_handshake_sync(ws)
+            assert resp["providers"] == [
+                {
+                    "id": "claude",
+                    "name": "Claude Code",
+                    "color": "#F97316",
+                    "models": ["haiku", "sonnet", "opus"],
+                },
+            ]
+            assert resp["active_provider"] == "sonnet"
+            assert resp["active_model"] == "claude"
 
-    async def test_auth_ok_without_providers_has_empty_list(
-        self,
-        api_ws: tuple[TestClient, ApiServer],
-    ) -> None:
-        client, _ = api_ws
-        ws = await client.ws_connect("/ws")
-        _e2e, resp = await _do_handshake(ws)
-        assert resp["providers"] == []
-        assert "active_provider" not in resp
-        await ws.close()
+    def test_auth_ok_without_providers_has_empty_list(self, api_server: ApiServer) -> None:
+        client = TestClient(api_server._app)
+        with client.websocket_connect("/ws") as ws:
+            _e2e, resp = _do_handshake_sync(ws)
+            assert resp["providers"] == []
+            assert "active_provider" not in resp
 
-    async def test_custom_chat_id(self, api_ws: tuple[TestClient, ApiServer]) -> None:
-        client, _ = api_ws
-        ws = await client.ws_connect("/ws")
-        _, resp = await _do_handshake(ws, chat_id=999)
-        assert resp["chat_id"] == 999
-        await ws.close()
+    def test_custom_chat_id(self, api_server: ApiServer) -> None:
+        client = TestClient(api_server._app)
+        with client.websocket_connect("/ws") as ws:
+            _, resp = _do_handshake_sync(ws, chat_id=999)
+            assert resp["chat_id"] == 999
 
-    async def test_missing_e2e_pk_rejected(self, api_ws: tuple[TestClient, ApiServer]) -> None:
-        client, _ = api_ws
-        ws = await client.ws_connect("/ws")
-        await ws.send_json({"type": "auth", "token": _DEFAULT_TOKEN})
-        resp = await ws.receive_json()
-        assert resp["type"] == "error"
-        assert resp["code"] == "auth_failed"
-        assert "e2e_pk" in resp["message"]
+    def test_missing_e2e_pk_rejected(self, api_server: ApiServer) -> None:
+        client = TestClient(api_server._app)
+        with client.websocket_connect("/ws") as ws:
+            ws.send_json({"type": "auth", "token": _DEFAULT_TOKEN})
+            resp = ws.receive_json()
+            assert resp["type"] == "error"
+            assert resp["code"] == "auth_failed"
+            assert "e2e_pk" in resp["message"]
 
-    async def test_invalid_e2e_pk_rejected(self, api_ws: tuple[TestClient, ApiServer]) -> None:
-        client, _ = api_ws
-        ws = await client.ws_connect("/ws")
-        await ws.send_json(
-            {"type": "auth", "token": _DEFAULT_TOKEN, "e2e_pk": "not-valid-base64!!"},
-        )
-        resp = await ws.receive_json()
-        assert resp["type"] == "error"
-        assert resp["code"] == "auth_failed"
+    def test_invalid_e2e_pk_rejected(self, api_server: ApiServer) -> None:
+        client = TestClient(api_server._app)
+        with client.websocket_connect("/ws") as ws:
+            ws.send_json(
+                {"type": "auth", "token": _DEFAULT_TOKEN, "e2e_pk": "not-valid-base64!!"},
+            )
+            resp = ws.receive_json()
+            assert resp["type"] == "error"
+            assert resp["code"] == "auth_failed"
 
-    async def test_wrong_token_rejected(self, api_ws: tuple[TestClient, ApiServer]) -> None:
-        client, _ = api_ws
-        ws = await client.ws_connect("/ws")
-        e2e = E2ESession()
-        await ws.send_json({"type": "auth", "token": "wrong", "e2e_pk": e2e.local_pk_b64})
-        resp = await ws.receive_json()
-        assert resp["type"] == "error"
-        assert resp["code"] == "auth_failed"
+    def test_wrong_token_rejected(self, api_server: ApiServer) -> None:
+        client = TestClient(api_server._app)
+        with client.websocket_connect("/ws") as ws:
+            e2e = E2ESession()
+            ws.send_json({"type": "auth", "token": "wrong", "e2e_pk": e2e.local_pk_b64})
+            resp = ws.receive_json()
+            assert resp["type"] == "error"
+            assert resp["code"] == "auth_failed"
 
-    async def test_auth_timeout(self, tmp_path: Path) -> None:
+    def test_auth_timeout(self, tmp_path: Path) -> None:
         """If client sends nothing within timeout, server closes with auth_timeout."""
-        import asyncio
-
         config = ApiConfig(
             enabled=True,
             host="127.0.0.1",
@@ -225,16 +202,12 @@ class TestE2EHandshake:
         async def _patched_wait_for(coro: Any, *, timeout: float) -> Any:  # noqa: ASYNC109
             return await original_wait_for(coro, timeout=0.1)
 
-        app = _build_app(server)
-        srv = TestServer(app)
-        tc = TestClient(srv)
-        await tc.start_server()
+        client = TestClient(server._app)
         with patch("botwerk_bot.api.server.asyncio.wait_for", side_effect=_patched_wait_for):
-            ws = await tc.ws_connect("/ws")
-            resp = await ws.receive_json()
-            assert resp["type"] == "error"
-            assert resp["code"] == "auth_timeout"
-        await tc.close()
+            with client.websocket_connect("/ws") as ws:
+                resp = ws.receive_json()
+                assert resp["type"] == "error"
+                assert resp["code"] == "auth_timeout"
 
 
 # ---------------------------------------------------------------------------
@@ -243,23 +216,19 @@ class TestE2EHandshake:
 
 
 class TestEncryptedMessages:
-    async def test_send_message_and_receive_result(
-        self,
-        api_ws: tuple[TestClient, ApiServer],
-    ) -> None:
-        client, _ = api_ws
-        ws = await client.ws_connect("/ws")
-        e2e, _ = await _do_handshake(ws)
+    def test_send_message_and_receive_result(self, api_server: ApiServer) -> None:
+        client = TestClient(api_server._app)
+        with client.websocket_connect("/ws") as ws:
+            e2e, _ = _do_handshake_sync(ws)
 
-        await _send_encrypted(ws, e2e, {"type": "message", "text": "hello"})
-        result = await _recv_encrypted(ws, e2e)
+            _send_encrypted_sync(ws, e2e, {"type": "message", "text": "hello"})
+            result = _recv_encrypted_sync(ws, e2e)
 
-        assert result["type"] == "result"
-        assert result["text"] == "ok"
-        assert result["stream_fallback"] is False
-        await ws.close()
+            assert result["type"] == "result"
+            assert result["text"] == "ok"
+            assert result["stream_fallback"] is False
 
-    async def test_streaming_callbacks_encrypted(self, tmp_path: Path) -> None:
+    def test_streaming_callbacks_encrypted(self, tmp_path: Path) -> None:
         """Verify text_delta, tool_activity, system_status are all encrypted."""
         events: list[dict[str, Any]] = []
 
@@ -278,22 +247,18 @@ class TestEncryptedMessages:
             return SimpleNamespace(text="chunk1chunk2", stream_fallback=False)
 
         server = _make_server(tmp_path, message_handler=AsyncMock(side_effect=fake_handler))
-        app = _build_app(server)
-        srv = TestServer(app)
-        tc = TestClient(srv)
-        await tc.start_server()
+        client = TestClient(server._app)
 
-        ws = await tc.ws_connect("/ws")
-        e2e, _ = await _do_handshake(ws)
+        with client.websocket_connect("/ws") as ws:
+            e2e, _ = _do_handshake_sync(ws)
+            _send_encrypted_sync(ws, e2e, {"type": "message", "text": "test"})
 
-        await _send_encrypted(ws, e2e, {"type": "message", "text": "test"})
-
-        # Collect all events until result
-        while True:
-            msg = await _recv_encrypted(ws, e2e)
-            events.append(msg)
-            if msg["type"] == "result":
-                break
+            # Collect all events until result
+            while True:
+                msg = _recv_encrypted_sync(ws, e2e)
+                events.append(msg)
+                if msg["type"] == "result":
+                    break
 
         types = [e["type"] for e in events]
         assert "system_status" in types
@@ -303,90 +268,61 @@ class TestEncryptedMessages:
 
         deltas = [e["data"] for e in events if e["type"] == "text_delta"]
         assert deltas == ["chunk1", "chunk2"]
-        await ws.close()
-        await tc.close()
 
-    async def test_abort_encrypted(self, api_ws: tuple[TestClient, ApiServer]) -> None:
-        client, _ = api_ws
-        ws = await client.ws_connect("/ws")
-        e2e, _ = await _do_handshake(ws)
+    def test_abort_encrypted(self, api_server: ApiServer) -> None:
+        client = TestClient(api_server._app)
+        with client.websocket_connect("/ws") as ws:
+            e2e, _ = _do_handshake_sync(ws)
+            _send_encrypted_sync(ws, e2e, {"type": "abort"})
+            resp = _recv_encrypted_sync(ws, e2e)
+            assert resp["type"] == "abort_ok"
+            assert resp["killed"] == 0
 
-        await _send_encrypted(ws, e2e, {"type": "abort"})
-        resp = await _recv_encrypted(ws, e2e)
-        assert resp["type"] == "abort_ok"
-        assert resp["killed"] == 0
-        await ws.close()
+    def test_stop_command_triggers_abort(self, api_server: ApiServer) -> None:
+        client = TestClient(api_server._app)
+        with client.websocket_connect("/ws") as ws:
+            e2e, _ = _do_handshake_sync(ws)
+            _send_encrypted_sync(ws, e2e, {"type": "message", "text": "/stop"})
+            resp = _recv_encrypted_sync(ws, e2e)
+            assert resp["type"] == "abort_ok"
 
-    async def test_stop_command_triggers_abort(
-        self,
-        api_ws: tuple[TestClient, ApiServer],
-    ) -> None:
-        client, _ = api_ws
-        ws = await client.ws_connect("/ws")
-        e2e, _ = await _do_handshake(ws)
+    def test_empty_message_returns_encrypted_error(self, api_server: ApiServer) -> None:
+        client = TestClient(api_server._app)
+        with client.websocket_connect("/ws") as ws:
+            e2e, _ = _do_handshake_sync(ws)
+            _send_encrypted_sync(ws, e2e, {"type": "message", "text": ""})
+            resp = _recv_encrypted_sync(ws, e2e)
+            assert resp["type"] == "error"
+            assert resp["code"] == "empty"
 
-        await _send_encrypted(ws, e2e, {"type": "message", "text": "/stop"})
-        resp = await _recv_encrypted(ws, e2e)
-        assert resp["type"] == "abort_ok"
-        await ws.close()
+    def test_unknown_type_returns_encrypted_error(self, api_server: ApiServer) -> None:
+        client = TestClient(api_server._app)
+        with client.websocket_connect("/ws") as ws:
+            e2e, _ = _do_handshake_sync(ws)
+            _send_encrypted_sync(ws, e2e, {"type": "unknown_cmd"})
+            resp = _recv_encrypted_sync(ws, e2e)
+            assert resp["type"] == "error"
+            assert resp["code"] == "unknown_type"
 
-    async def test_empty_message_returns_encrypted_error(
-        self,
-        api_ws: tuple[TestClient, ApiServer],
-    ) -> None:
-        client, _ = api_ws
-        ws = await client.ws_connect("/ws")
-        e2e, _ = await _do_handshake(ws)
+    def test_bad_ciphertext_returns_decrypt_error(self, api_server: ApiServer) -> None:
+        client = TestClient(api_server._app)
+        with client.websocket_connect("/ws") as ws:
+            e2e, _ = _do_handshake_sync(ws)
+            # Send garbage base64 that won't decrypt
+            ws.send_text(base64.b64encode(b"not-real-ciphertext-at-all-" * 3).decode())
+            resp = _recv_encrypted_sync(ws, e2e)
+            assert resp["type"] == "error"
+            assert resp["code"] == "decrypt_failed"
 
-        await _send_encrypted(ws, e2e, {"type": "message", "text": ""})
-        resp = await _recv_encrypted(ws, e2e)
-        assert resp["type"] == "error"
-        assert resp["code"] == "empty"
-        await ws.close()
-
-    async def test_unknown_type_returns_encrypted_error(
-        self,
-        api_ws: tuple[TestClient, ApiServer],
-    ) -> None:
-        client, _ = api_ws
-        ws = await client.ws_connect("/ws")
-        e2e, _ = await _do_handshake(ws)
-
-        await _send_encrypted(ws, e2e, {"type": "unknown_cmd"})
-        resp = await _recv_encrypted(ws, e2e)
-        assert resp["type"] == "error"
-        assert resp["code"] == "unknown_type"
-        await ws.close()
-
-    async def test_bad_ciphertext_returns_decrypt_error(
-        self,
-        api_ws: tuple[TestClient, ApiServer],
-    ) -> None:
-        client, _ = api_ws
-        ws = await client.ws_connect("/ws")
-        e2e, _ = await _do_handshake(ws)
-
-        # Send garbage base64 that won't decrypt
-        await ws.send_str(base64.b64encode(b"not-real-ciphertext-at-all-" * 3).decode())
-        resp = await _recv_encrypted(ws, e2e)
-        assert resp["type"] == "error"
-        assert resp["code"] == "decrypt_failed"
-        await ws.close()
-
-    async def test_plaintext_json_rejected_after_auth(
-        self,
-        api_ws: tuple[TestClient, ApiServer],
-    ) -> None:
+    def test_plaintext_json_rejected_after_auth(self, api_server: ApiServer) -> None:
         """After auth, plaintext JSON should fail decryption."""
-        client, _ = api_ws
-        ws = await client.ws_connect("/ws")
-        e2e, _ = await _do_handshake(ws)
-
-        await ws.send_str(json.dumps({"type": "message", "text": "hi"}))
-        resp = await _recv_encrypted(ws, e2e)
-        assert resp["type"] == "error"
-        assert resp["code"] == "decrypt_failed"
-        await ws.close()
+        client = TestClient(api_server._app)
+        with client.websocket_connect("/ws") as ws:
+            e2e, _ = _do_handshake_sync(ws)
+            ws.send_text(json.dumps({"type": "message", "text": "hi"}))
+            resp = _recv_encrypted_sync(ws, e2e)
+            assert resp["type"] == "error"
+            assert resp["code"] == "decrypt_failed"
 
 
 # ---------------------------------------------------------------------------
@@ -395,41 +331,34 @@ class TestEncryptedMessages:
 
 
 class TestSessionIsolation:
-    async def test_different_sessions_different_keys(self, tmp_path: Path) -> None:
+    def test_different_sessions_different_keys(self, tmp_path: Path) -> None:
         """Two clients get independent E2E sessions with different keys."""
         server = _make_server(tmp_path)
-        app = _build_app(server)
-        srv = TestServer(app)
-        tc = TestClient(srv)
-        await tc.start_server()
+        client = TestClient(server._app)
 
-        ws1 = await tc.ws_connect("/ws")
-        e2e1, resp1 = await _do_handshake(ws1, chat_id=1)
+        with client.websocket_connect("/ws") as ws1:
+            e2e1, resp1 = _do_handshake_sync(ws1, chat_id=1)
 
-        ws2 = await tc.ws_connect("/ws")
-        e2e2, resp2 = await _do_handshake(ws2, chat_id=2)
+            with client.websocket_connect("/ws") as ws2:
+                e2e2, resp2 = _do_handshake_sync(ws2, chat_id=2)
 
-        # Server generates different keypairs per connection
-        assert resp1["e2e_pk"] != resp2["e2e_pk"]
+                # Server generates different keypairs per connection
+                assert resp1["e2e_pk"] != resp2["e2e_pk"]
 
-        # Each session works independently
-        await _send_encrypted(ws1, e2e1, {"type": "message", "text": "from 1"})
-        r1 = await _recv_encrypted(ws1, e2e1)
-        assert r1["type"] == "result"
+                # Each session works independently
+                _send_encrypted_sync(ws1, e2e1, {"type": "message", "text": "from 1"})
+                r1 = _recv_encrypted_sync(ws1, e2e1)
+                assert r1["type"] == "result"
 
-        await _send_encrypted(ws2, e2e2, {"type": "message", "text": "from 2"})
-        r2 = await _recv_encrypted(ws2, e2e2)
-        assert r2["type"] == "result"
+                _send_encrypted_sync(ws2, e2e2, {"type": "message", "text": "from 2"})
+                r2 = _recv_encrypted_sync(ws2, e2e2)
+                assert r2["type"] == "result"
 
-        # Cross-session decryption must fail: client2 cannot read client1's traffic
-        await _send_encrypted(ws1, e2e1, {"type": "abort"})
-        raw_msg = await ws1.receive()
-        with pytest.raises(CryptoError):
-            e2e2.decrypt(raw_msg.data)
-
-        await ws1.close()
-        await ws2.close()
-        await tc.close()
+                # Cross-session decryption must fail: client2 cannot read client1's traffic
+                _send_encrypted_sync(ws1, e2e1, {"type": "abort"})
+                raw_text = ws1.receive_text()
+                with pytest.raises(CryptoError):
+                    e2e2.decrypt(raw_text)
 
 
 # ---------------------------------------------------------------------------
@@ -438,7 +367,7 @@ class TestSessionIsolation:
 
 
 class TestEncryptedFileRefs:
-    async def test_file_refs_in_encrypted_result(self, tmp_path: Path) -> None:
+    def test_file_refs_in_encrypted_result(self, tmp_path: Path) -> None:
         handler = AsyncMock(
             return_value=SimpleNamespace(
                 text="Here is the file <file:/tmp/chart.png>",
@@ -446,19 +375,14 @@ class TestEncryptedFileRefs:
             ),
         )
         server = _make_server(tmp_path, message_handler=handler)
-        app = _build_app(server)
-        srv = TestServer(app)
-        tc = TestClient(srv)
-        await tc.start_server()
+        client = TestClient(server._app)
 
-        ws = await tc.ws_connect("/ws")
-        e2e, _ = await _do_handshake(ws)
-        await _send_encrypted(ws, e2e, {"type": "message", "text": "make chart"})
-        result = await _recv_encrypted(ws, e2e)
+        with client.websocket_connect("/ws") as ws:
+            e2e, _ = _do_handshake_sync(ws)
+            _send_encrypted_sync(ws, e2e, {"type": "message", "text": "make chart"})
+            result = _recv_encrypted_sync(ws, e2e)
 
-        assert result["type"] == "result"
-        assert len(result["files"]) == 1
-        assert result["files"][0]["name"] == "chart.png"
-        assert result["files"][0]["is_image"] is True
-        await ws.close()
-        await tc.close()
+            assert result["type"] == "result"
+            assert len(result["files"]) == 1
+            assert result["files"][0]["name"] == "chart.png"
+            assert result["files"][0]["is_image"] is True

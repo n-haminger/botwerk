@@ -2,11 +2,11 @@
 """Send an async task to another agent via the InterAgentBus.
 
 Unlike ask_agent.py, this returns immediately with a task_id.
-The sub-agent's response is delivered back to YOUR Telegram chat
+The sub-agent's response is delivered back to YOUR chat
 (the calling agent's chat) when ready — NOT to the sub-agent's chat.
 
 The response ALWAYS comes back to YOU (the calling agent). There is no way
-to make the sub-agent reply in its own Telegram chat via this tool.
+to make the sub-agent reply in its own chat via this tool.
 
 Uses the internal localhost HTTP API to communicate with the bus.
 Environment variables BOTWERK_AGENT_NAME, BOTWERK_INTERAGENT_PORT, and
@@ -19,7 +19,7 @@ Options:
     --new                Start a fresh session, discarding any prior inter-agent context
                          with the recipient. Without this flag, the recipient resumes
                          the existing session (if any).
-    --summary "text"     Short description shown in the recipient's Telegram chat
+    --summary "text"     Short description shown in the recipient's chat
                          notification instead of a truncated message excerpt.
 """
 

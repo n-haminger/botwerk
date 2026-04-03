@@ -96,7 +96,7 @@ def _generate_task_xml(command: str, arguments: str = "") -> str:
 
     # -- Registration info --
     reg = SubElement(task, "RegistrationInfo")
-    SubElement(reg, "Description").text = "botwerk - Telegram bot powered by AI CLIs"
+    SubElement(reg, "Description").text = "botwerk - AI agent orchestrator powered by AI CLIs"
 
     # -- Triggers: start on logon --
     triggers = SubElement(task, "Triggers")

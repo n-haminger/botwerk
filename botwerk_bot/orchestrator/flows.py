@@ -210,8 +210,7 @@ _INVALID_SESSION_MARKERS = ("invalid session", "session not found")
 def _is_invalid_session(response: AgentResponse) -> bool:
     """Return True when the CLI rejected a ``--resume`` session ID.
 
-    Happens when sessions created on host are resumed inside Docker
-    (or vice-versa) because working directories differ.
+    Happens when sessions reference a stale working directory.
     """
     if not response.is_error:
         return False

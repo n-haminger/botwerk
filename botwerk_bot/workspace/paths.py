@@ -30,7 +30,7 @@ class BotwerkPaths:
 
     - ``botwerk_home``:    User data directory (default ``~/.botwerk``).
     - ``home_defaults``:  Bundled template that mirrors ``botwerk_home`` (package-internal).
-    - ``framework_root``: Repository root (for Dockerfile, config.example.json).
+    - ``framework_root``: Repository root (for config.example.json).
     """
 
     botwerk_home: Path
@@ -84,22 +84,12 @@ class BotwerkPaths:
         return self.workspace / "output_to_user"
 
     @property
-    def telegram_files_dir(self) -> Path:
-        return self.workspace / "telegram_files"
-
-    @property
-    def matrix_files_dir(self) -> Path:
-        return self.workspace / "matrix_files"
+    def media_files_dir(self) -> Path:
+        return self.workspace / "media_files"
 
     @property
     def api_files_dir(self) -> Path:
         return self.workspace / "api_files"
-
-    def media_files_dir(self, transport: str) -> Path:
-        """Return the media files directory for the given transport."""
-        if transport == "matrix":
-            return self.matrix_files_dir
-        return self.telegram_files_dir
 
     @property
     def memory_system_dir(self) -> Path:
@@ -162,14 +152,6 @@ class BotwerkPaths:
         if repo_path.is_file():
             return repo_path
         return _PKG_DIR / "_config_example.json"
-
-    @property
-    def dockerfile_sandbox_path(self) -> Path:
-        """Dockerfile.sandbox: repo root (dev) or package-bundled (installed)."""
-        repo_path = self.framework_root / "Dockerfile.sandbox"
-        if repo_path.is_file():
-            return repo_path
-        return _PKG_DIR / "_Dockerfile.sandbox"
 
 
 def resolve_paths(

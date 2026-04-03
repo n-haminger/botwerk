@@ -7,7 +7,7 @@ The file uses standard dotenv syntax::
     DEEPSEEK_API_KEY=sk-yyy
     export MY_VAR="quoted value"
 
-Values are injected into CLI subprocesses (host and Docker) but never
+Values are injected into CLI subprocesses but never
 override variables that are already set in the environment.
 
 The file is re-read automatically when its mtime changes, so edits take

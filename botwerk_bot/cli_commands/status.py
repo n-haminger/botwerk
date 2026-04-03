@@ -28,8 +28,6 @@ class StatusSummary:
     bot_uptime: str
     provider: str
     model: str
-    docker_enabled: bool
-    docker_name: str | None
     error_count: int
 
 
@@ -43,10 +41,6 @@ def build_status_lines(status: StatusSummary, *, paths: BotwerkPaths) -> list[st
     else:
         lines.append("[dim]Not running[/dim]")
     lines.append(f"Provider:  [cyan]{status.provider}[/cyan] ({status.model})")
-    if status.docker_enabled:
-        lines.append(f"Docker:    [green]enabled[/green] ({status.docker_name})")
-    else:
-        lines.append("Docker:    [dim]disabled[/dim]")
     if status.error_count > 0:
         lines.append(f"Errors:    [bold red]{status.error_count}[/bold red] in latest log")
     else:
@@ -92,11 +86,6 @@ def print_status() -> None:
 
     provider = data.get("provider", "claude")
     model = data.get("model", "opus")
-    docker_cfg = data.get("docker", {})
-    docker_enabled = isinstance(docker_cfg, dict) and bool(docker_cfg.get("enabled"))
-    docker_name: str | None = None
-    if docker_enabled and isinstance(docker_cfg, dict):
-        docker_name = str(docker_cfg.get("container_name", "botwerk-sandbox"))
 
     # Running state
     pid_file = paths.botwerk_home / "bot.pid"
@@ -129,8 +118,6 @@ def print_status() -> None:
         bot_uptime=bot_uptime,
         provider=str(provider),
         model=str(model),
-        docker_enabled=docker_enabled,
-        docker_name=str(docker_name) if docker_name else None,
         error_count=error_count,
     )
     lines = build_status_lines(summary, paths=paths)
@@ -174,7 +161,7 @@ def print_usage() -> None:
     table.add_column()
     table.add_row("botwerk", "Start the bot (runs onboarding if needed)")
     table.add_row("botwerk onboarding", "Setup wizard (resets if already configured)")
-    table.add_row("botwerk stop", "Stop running bot and Docker container")
+    table.add_row("botwerk stop", "Stop running bot")
     table.add_row("botwerk restart", "Restart the bot")
     table.add_row("botwerk reset", "Full reset and re-setup")
     table.add_row("botwerk upgrade", "Stop, upgrade to latest, restart")
@@ -184,7 +171,6 @@ def print_usage() -> None:
     table.add_row("botwerk service install", f"Run as background service ({svc_hint})")
     table.add_row("botwerk service", "Service management (status/stop/logs/...)")
     table.add_row("botwerk agents", "Sub-agent management (list/add/remove)")
-    table.add_row("botwerk docker", "Docker management (rebuild/enable/disable)")
     table.add_row("botwerk api", "API server management (enable/disable) [beta]")
     table.add_row("botwerk status", "Show bot status, paths, and agents")
     table.add_row("botwerk help", "Show this message")

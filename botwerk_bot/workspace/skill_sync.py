@@ -6,10 +6,6 @@ Codex CLI, Gemini CLI, or the botwerk workspace are visible to all agents.
 Includes bundled-skill linking (package → workspace), sync-time external-symlink
 protection, and cleanup of botwerk-created links on shutdown.
 
-When Docker sandboxing is active, symlinks are replaced with directory copies
-(marked with ``.botwerk_managed``) because absolute host paths do not resolve
-inside the container's mount namespace.
-
 Sync runs once during ``init_workspace`` and periodically as a background task.
 """
 
@@ -18,7 +14,6 @@ from __future__ import annotations
 import asyncio
 import logging
 import os
-import shutil
 import subprocess
 import sys
 from pathlib import Path
@@ -34,7 +29,6 @@ _SKIP_DIRS: frozenset[str] = frozenset(
 )
 
 _SKILL_SYNC_INTERVAL = 30.0
-_MANAGED_MARKER = ".botwerk_managed"
 
 
 def _is_under(child: Path, parent: Path) -> bool:
@@ -163,61 +157,6 @@ def _ensure_link(link_path: Path, target: Path) -> bool:
 
 
 # ---------------------------------------------------------------------------
-# Docker-aware copy helpers
-# ---------------------------------------------------------------------------
-
-
-def _is_managed_copy(path: Path) -> bool:
-    """Return ``True`` if *path* is a botwerk-managed copy (has marker file)."""
-    return path.is_dir() and not path.is_symlink() and (path / _MANAGED_MARKER).is_file()
-
-
-def _newest_mtime(directory: Path) -> float:
-    """Return the newest mtime of any file or directory under *directory*.
-
-    Tolerates files disappearing during iteration (concurrent modifications).
-    """
-    newest = directory.stat().st_mtime
-    for entry in directory.rglob("*"):
-        try:
-            newest = max(newest, entry.stat().st_mtime)
-        except OSError:
-            continue
-    return newest
-
-
-def _ensure_copy(dest: Path, source: Path) -> bool:
-    """Copy *source* directory to *dest* with a ``.botwerk_managed`` marker.
-
-    Skips the copy when *dest* already has the marker and *source* has not
-    been modified since the last copy (recursive mtime comparison).
-
-    Tolerates concurrent modifications from other agents running skill sync
-    in parallel (marker may vanish between check and stat, rmtree may race
-    with Python's import machinery or another agent's copytree).
-
-    Returns ``True`` if a new copy was made.
-    """
-    marker = dest / _MANAGED_MARKER
-    if _is_managed_copy(dest):
-        try:
-            if _newest_mtime(source) <= marker.stat().st_mtime:
-                return False
-        except OSError:
-            pass  # marker removed concurrently — proceed with fresh copy
-        shutil.rmtree(dest, ignore_errors=True)
-    elif dest.exists() and not dest.is_symlink():
-        return False
-
-    if dest.is_symlink():
-        dest.unlink()
-
-    shutil.copytree(source, dest, symlinks=True, dirs_exist_ok=True)
-    marker.touch()
-    return True
-
-
-# ---------------------------------------------------------------------------
 # Broken link cleanup
 # ---------------------------------------------------------------------------
 
@@ -249,25 +188,15 @@ def _should_skip_link(dest: Path, sync_roots: frozenset[Path]) -> bool:
     return False
 
 
-def _should_skip_copy(dest: Path) -> bool:
-    """Return ``True`` if *dest* should be left alone during copy sync."""
-    return dest.exists() and not dest.is_symlink() and not _is_managed_copy(dest)
-
-
 def _link_skill_everywhere(
     skill_name: str,
     canonical: Path,
     all_dirs: dict[str, Path],
-    *,
-    use_copies: bool = False,
 ) -> None:
-    """Create symlinks (or copies) for *skill_name* in every location that lacks it.
+    """Create symlinks for *skill_name* in every location that lacks it.
 
     Preserves existing symlinks that point outside the known sync directories
     (user-managed external links are never touched).
-
-    When *use_copies* is ``True`` (Docker mode), directories are copied
-    instead of symlinked so they resolve inside the container.
     """
     sync_roots = frozenset(d.resolve() for d in all_dirs.values() if d.is_dir())
     for loc_name, base_dir in all_dirs.items():
@@ -276,27 +205,20 @@ def _link_skill_everywhere(
         dest = base_dir / skill_name
         if dest == canonical:
             continue
-        skip = _should_skip_copy(dest) if use_copies else _should_skip_link(dest, sync_roots)
-        if skip:
+        if _should_skip_link(dest, sync_roots):
             continue
         try:
-            if use_copies:
-                if _ensure_copy(dest, canonical):
-                    logger.info("Skill copied: %s -> %s", dest, canonical)
-            elif _ensure_link(dest, canonical):
+            if _ensure_link(dest, canonical):
                 logger.info("Skill link created: %s -> %s", dest, canonical)
         except OSError:
             logger.warning("Failed to sync skill %s in %s", skill_name, loc_name, exc_info=True)
 
 
-def sync_skills(paths: BotwerkPaths, *, docker_active: bool = False) -> None:
+def sync_skills(paths: BotwerkPaths) -> None:
     """Multi-way skill directory sync: botwerk workspace <-> CLI skill dirs.
 
     Syncs between botwerk workspace, ~/.claude/skills, ~/.codex/skills,
     and ~/.gemini/skills.
-
-    When *docker_active* is ``True``, copies are used instead of symlinks
-    so skills resolve inside the Docker container.
 
     Safety guarantees:
     - Real directories are never overwritten or removed.
@@ -320,7 +242,7 @@ def sync_skills(paths: BotwerkPaths, *, docker_active: bool = False) -> None:
             *(registries.get(n, {}) for n in priority),
         )
         if canonical is not None:
-            _link_skill_everywhere(skill_name, canonical, all_dirs, use_copies=docker_active)
+            _link_skill_everywhere(skill_name, canonical, all_dirs)
 
     for base_dir in all_dirs.values():
         removed = _clean_broken_links(base_dir)
@@ -343,26 +265,17 @@ def _iter_bundled_entries(paths: BotwerkPaths) -> list[tuple[Path, Path]]:
     return pairs
 
 
-def sync_bundled_skills(paths: BotwerkPaths, *, docker_active: bool = False) -> None:
+def sync_bundled_skills(paths: BotwerkPaths) -> None:
     """Sync bundled skills from the package into the botwerk workspace.
 
-    Creates symlinks (or copies when *docker_active*) from
-    ``~/.botwerk/workspace/skills/<name>`` to the package's
-    ``_home_defaults/workspace/skills/<name>`` so bundled skills
+    Creates symlinks from ``~/.botwerk/workspace/skills/<name>`` to the
+    package's ``_home_defaults/workspace/skills/<name>`` so bundled skills
     stay up-to-date with the installed botwerk version.
 
     Real directories are never overwritten (preserves user modifications
     from older Zone 3 copies or manually created skills with the same name).
     """
     for source, target in _iter_bundled_entries(paths):
-        if docker_active:
-            try:
-                if _ensure_copy(target, source):
-                    logger.info("Bundled skill copied: %s -> %s", target, source)
-            except OSError:
-                logger.warning("Failed to copy bundled skill %s", source.name, exc_info=True)
-            continue
-
         if target.exists() and not target.is_symlink():
             continue
         if target.is_symlink():
@@ -414,7 +327,6 @@ def cleanup_botwerk_links(paths: BotwerkPaths) -> int:
 async def watch_skill_sync(
     paths: BotwerkPaths,
     *,
-    docker_active: bool = False,
     interval: float = _SKILL_SYNC_INTERVAL,
 ) -> None:
     """Continuously sync skill directories across all agents.
@@ -425,6 +337,6 @@ async def watch_skill_sync(
     while True:
         await asyncio.sleep(interval)
         try:
-            await asyncio.to_thread(sync_skills, paths, docker_active=docker_active)
+            await asyncio.to_thread(sync_skills, paths)
         except Exception:
             logger.exception("Skill sync failed")

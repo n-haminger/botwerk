@@ -31,29 +31,8 @@ _RESTART_BACKOFF_BASE = 5  # seconds, doubles each retry
 
 def _config_changed(new: AgentConfig, old: AgentConfig) -> bool:
     """Detect meaningful config changes that require agent restart."""
-    if new.transport != old.transport:
-        return True
-    return _TRANSPORT_IDENTITY_CHANGED.get(new.transport, _default_identity_check)(new, old)
-
-
-def _telegram_identity_check(new: AgentConfig, old: AgentConfig) -> bool:
-    return new.telegram_token != old.telegram_token
-
-
-def _matrix_identity_check(new: AgentConfig, old: AgentConfig) -> bool:
-    return (
-        new.matrix.homeserver != old.matrix.homeserver or new.matrix.user_id != old.matrix.user_id
-    )
-
-
-def _default_identity_check(new: AgentConfig, old: AgentConfig) -> bool:
-    return False
-
-
-_TRANSPORT_IDENTITY_CHANGED: dict[str, object] = {
-    "telegram": _telegram_identity_check,
-    "matrix": _matrix_identity_check,
-}
+    # With only WebUI transport, compare provider/model identity.
+    return new.provider != old.provider or new.model != old.model
 
 
 class AgentSupervisor:
@@ -145,7 +124,6 @@ class AgentSupervisor:
         self._internal_api = InternalAgentAPI(
             self._bus,
             port=self._main_config.interagent_port,
-            docker_mode=self._main_config.docker.enabled,
             auth_registry=self._auth_registry,
         )
         self._internal_api.set_health_ref(self._health)
@@ -191,19 +169,9 @@ class AgentSupervisor:
             name="agent:main",
         )
 
-        # 2. Wait for main agent startup (Docker, workspace, auth) before
-        #    starting sub-agents.  This ensures Docker is set up exactly once
-        #    by the main agent; sub-agents reuse the existing container.
-        #    Timeout is extended when Docker extras are configured because the
-        #    first image build can take several minutes.
+        # 2. Wait for main agent startup (workspace, auth) before
+        #    starting sub-agents.
         startup_timeout = 120
-        if self._main_config.docker.enabled and self._main_config.docker.extras:
-            from botwerk_bot.infra.docker_extras import calculate_build_timeout, resolve_extras
-
-            startup_timeout = max(
-                startup_timeout,
-                calculate_build_timeout(resolve_extras(self._main_config.docker.extras)),
-            )
         try:
             await asyncio.wait_for(self._main_ready.wait(), timeout=startup_timeout)
         except TimeoutError:
@@ -379,12 +347,12 @@ class AgentSupervisor:
     def _inject_supervisor_hook(self, stack: AgentStack) -> None:
         """Register a dispatcher startup hook to inject supervisor reference.
 
-        The orchestrator is created during TelegramBot._on_startup(). We register
-        an additional startup handler that fires AFTER _on_startup and sets the
+        The orchestrator is created during the bot's startup. We register
+        an additional startup handler that fires AFTER startup and sets the
         supervisor reference + registers multi-agent commands on the main agent.
 
         For the main agent this also signals ``_main_ready`` so the supervisor
-        knows Docker and workspace init are complete before starting sub-agents.
+        knows workspace init is complete before starting sub-agents.
         """
         supervisor = self
 
@@ -405,7 +373,7 @@ class AgentSupervisor:
             logger.debug("Supervisor reference injected into agent '%s'", stack.name)
 
         # Startup handlers run in registration order;
-        # TelegramBot registers _on_startup in __init__, so ours runs after.
+        # The bot registers its startup handler in __init__, so ours runs after.
         stack.bot.register_startup_hook(_post_startup)
 
     def _wire_task_hub(self, stack: AgentStack) -> None:
@@ -433,8 +401,7 @@ class AgentSupervisor:
         hub.set_question_handler(name, stack.bot.on_task_question)
 
         # Register agent's primary chat_id for resolving CLI-submitted tasks
-        if stack.config.allowed_user_ids:
-            hub.set_agent_chat_id(name, stack.config.allowed_user_ids[0])
+        # (WebUI will set chat_id via a different mechanism in the future)
 
         logger.debug("Task hub wired for agent '%s'", name)
 
@@ -481,9 +448,7 @@ class AgentSupervisor:
             return
 
         # Workspace init creates config.json from config.example (main defaults).
-        # Overwrite model/provider/effort/transport so the on-disk config matches
-        # agents.json.  Without transport + matrix credentials the agent would
-        # start with the template default ("telegram") and crash on restart.
+        # Overwrite model/provider/effort so the on-disk config matches agents.json.
         config_path = agent_home / "config" / "config.json"
         if config_path.exists():
             updates: dict[str, object] = {
@@ -491,10 +456,7 @@ class AgentSupervisor:
                 "provider": config.provider,
                 "model": config.model,
                 "reasoning_effort": config.reasoning_effort,
-                "transport": config.transport,
             }
-            if config.transport == "matrix" and config.matrix:
-                updates["matrix"] = config.matrix.model_dump()
             await update_config_file_async(config_path, **updates)
 
         # Grant the isolated agent user ACL-based access to the workspace.
@@ -755,12 +717,12 @@ class AgentSupervisor:
         if self._task_hub is None:
             return 0
         total = 0
-        for stack in list(self._stacks.values()):
-            for cid in stack.config.allowed_user_ids:
-                k = await self._task_hub.cancel_all(cid)
-                if k:
-                    logger.info("Abort-all cancelled %d task(s) for agent '%s'", k, stack.name)
-                total += k
+        # Cancel tasks for all known chat IDs in the task hub
+        for task_entry in self._task_hub._registry.list_all():
+            k = await self._task_hub.cancel_all(task_entry.chat_id)
+            if k:
+                logger.info("Abort-all cancelled %d task(s) for chat %d", k, task_entry.chat_id)
+            total += k
         return total
 
     # -- Shutdown -----------------------------------------------------------

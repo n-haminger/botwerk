@@ -28,7 +28,7 @@ class TestLoadConfig:
         home = tmp_path / ".botwerk"
         fw = tmp_path / "framework"
         fw.mkdir()
-        example = {"telegram_token": "TEST", "provider": "claude"}
+        example = {"provider": "claude", "model": "opus"}
         (fw / "config.example.json").write_text(json.dumps(example))
 
         with patch("botwerk_bot.__main__.resolve_paths") as mock_paths:
@@ -39,7 +39,7 @@ class TestLoadConfig:
             with patch("botwerk_bot.__main__.init_workspace"):
                 config = load_config()
 
-        assert config.telegram_token == "TEST"
+        assert config.provider == "claude"
         assert paths.config_path.exists()
 
     def test_preserves_existing_user_config(self, tmp_path: Path) -> None:
@@ -50,7 +50,7 @@ class TestLoadConfig:
         config_dir.mkdir(parents=True)
         fw = tmp_path / "framework"
         fw.mkdir()
-        user_cfg = {"telegram_token": "MY_TOKEN", "provider": "codex", "model": "gpt-5.2-codex"}
+        user_cfg = {"provider": "codex", "model": "gpt-5.2-codex"}
         (config_dir / "config.json").write_text(json.dumps(user_cfg))
 
         with patch("botwerk_bot.__main__.resolve_paths") as mock_paths:
@@ -61,7 +61,6 @@ class TestLoadConfig:
             with patch("botwerk_bot.__main__.init_workspace"):
                 config = load_config()
 
-        assert config.telegram_token == "MY_TOKEN"
         assert config.provider == "codex"
 
     def test_merges_new_defaults_into_existing(self, tmp_path: Path) -> None:
@@ -72,7 +71,7 @@ class TestLoadConfig:
         config_dir.mkdir(parents=True)
         fw = tmp_path / "framework"
         fw.mkdir()
-        old_cfg = {"telegram_token": "TOKEN", "provider": "claude"}
+        old_cfg = {"provider": "claude"}
         (config_dir / "config.json").write_text(json.dumps(old_cfg))
 
         with patch("botwerk_bot.__main__.resolve_paths") as mock_paths:
@@ -116,7 +115,7 @@ class TestLoadConfig:
         config_dir.mkdir(parents=True)
         fw = tmp_path / "framework"
         fw.mkdir()
-        user_cfg = {"telegram_token": "TOKEN", "provider": "claude", "gemini_api_key": None}
+        user_cfg = {"provider": "claude", "gemini_api_key": None}
         (config_dir / "config.json").write_text(json.dumps(user_cfg), encoding="utf-8")
 
         with patch("botwerk_bot.__main__.resolve_paths") as mock_paths:
@@ -145,13 +144,13 @@ class TestIsConfigured:
             mock_paths.return_value = paths
             assert _is_configured() is False
 
-    def test_configured_with_valid_token(self, tmp_path: Path) -> None:
+    def test_configured_with_valid_config(self, tmp_path: Path) -> None:
         from botwerk_bot.__main__ import _is_configured
 
         home = tmp_path / "home"
         config_dir = home / "config"
         config_dir.mkdir(parents=True)
-        cfg = {"telegram_token": "123456:ABC", "allowed_user_ids": [1]}
+        cfg = {"provider": "claude", "model": "opus"}
         (config_dir / "config.json").write_text(json.dumps(cfg))
 
         with patch("botwerk_bot.__main__.resolve_paths") as mock_paths:
@@ -164,36 +163,11 @@ class TestIsConfigured:
             assert _is_configured() is True
 
 
-class TestRunTelegram:
-    async def test_exits_on_missing_token(self, tmp_path: Path) -> None:
-        from botwerk_bot.__main__ import run_telegram
-
-        config = AgentConfig(telegram_token="", botwerk_home=str(tmp_path))
-        with pytest.raises(SystemExit):
-            await run_telegram(config)
-
-    async def test_exits_on_placeholder_token(self, tmp_path: Path) -> None:
-        from botwerk_bot.__main__ import run_telegram
-
-        config = AgentConfig(telegram_token="YOUR_TOKEN_HERE", botwerk_home=str(tmp_path))
-        with pytest.raises(SystemExit):
-            await run_telegram(config)
-
-    async def test_exits_on_empty_allowed_users(self, tmp_path: Path) -> None:
-        from botwerk_bot.__main__ import run_telegram
-
-        config = AgentConfig(
-            telegram_token="valid:token", allowed_user_ids=[], botwerk_home=str(tmp_path)
-        )
-        with pytest.raises(SystemExit):
-            await run_telegram(config)
-
+class TestRunBot:
     async def test_runs_bot_with_valid_config(self, tmp_path: Path) -> None:
-        from botwerk_bot.__main__ import run_telegram
+        from botwerk_bot.__main__ import run_bot
 
-        config = AgentConfig(
-            telegram_token="valid:token", allowed_user_ids=[123], botwerk_home=str(tmp_path)
-        )
+        config = AgentConfig(botwerk_home=str(tmp_path))
         mock_supervisor = MagicMock()
         mock_supervisor.start = AsyncMock(return_value=0)
         mock_supervisor.stop_all = AsyncMock()
@@ -207,7 +181,7 @@ class TestRunTelegram:
                 return_value=mock_supervisor,
             ),
         ):
-            await run_telegram(config)
+            await run_bot(config)
 
         mock_supervisor.start.assert_called_once()
         mock_supervisor.stop_all.assert_called_once()
@@ -226,22 +200,6 @@ def _write_config(paths: BotwerkPaths, data: dict[str, object]) -> None:
 
 
 class TestIsConfiguredExtended:
-    def test_unconfigured_with_placeholder_token(self, tmp_path: Path) -> None:
-        from botwerk_bot.__main__ import _is_configured
-
-        paths = _make_paths(tmp_path)
-        _write_config(paths, {"telegram_token": "YOUR_TOKEN", "allowed_user_ids": [1]})
-        with patch("botwerk_bot.__main__.resolve_paths", return_value=paths):
-            assert _is_configured() is False
-
-    def test_unconfigured_with_empty_users(self, tmp_path: Path) -> None:
-        from botwerk_bot.__main__ import _is_configured
-
-        paths = _make_paths(tmp_path)
-        _write_config(paths, {"telegram_token": "123:ABC", "allowed_user_ids": []})
-        with patch("botwerk_bot.__main__.resolve_paths", return_value=paths):
-            assert _is_configured() is False
-
     def test_unconfigured_with_corrupt_json(self, tmp_path: Path) -> None:
         from botwerk_bot.__main__ import _is_configured
 
@@ -276,27 +234,6 @@ class TestStopBot:
         with patch(f"{_LIFECYCLE}.resolve_paths", return_value=paths):
             stop_bot()
 
-    def test_stop_with_docker(self, tmp_path: Path) -> None:
-        from botwerk_bot.cli_commands.lifecycle import stop_bot
-
-        paths = _make_paths(tmp_path)
-        paths.botwerk_home.mkdir(parents=True)
-        _write_config(
-            paths,
-            {
-                "docker": {"enabled": True, "container_name": "test-container"},
-                "telegram_token": "x",
-                "allowed_user_ids": [1],
-            },
-        )
-        with (
-            patch(f"{_LIFECYCLE}.resolve_paths", return_value=paths),
-            patch(f"{_LIFECYCLE}.shutil.which", return_value="/usr/bin/docker"),
-            patch(f"{_LIFECYCLE}.subprocess.run") as mock_run,
-        ):
-            stop_bot()
-        docker_calls = [c for c in mock_run.call_args_list if "docker" in str(c)]
-        assert len(docker_calls) >= 2
 
 
 class TestUpgradeCli:
@@ -424,7 +361,7 @@ def _mock_asyncio_run(return_value: int):
 
 class TestStartBotRestart:
     def _mock_config(self) -> AgentConfig:
-        return AgentConfig(telegram_token="test:token", allowed_user_ids=[1])
+        return AgentConfig()
 
     def test_exit42_with_supervisor_exits(self) -> None:
         from botwerk_bot.cli_commands.lifecycle import start_bot
@@ -527,7 +464,7 @@ class TestUninstall:
 
         paths = _make_paths(tmp_path)
         paths.botwerk_home.mkdir(parents=True)
-        _write_config(paths, {"telegram_token": "x", "allowed_user_ids": [1]})
+        _write_config(paths, {"provider": "claude"})
         with (
             patch(f"{_LIFECYCLE}.resolve_paths", return_value=paths),
             patch("questionary.confirm") as mock_confirm,
@@ -544,7 +481,7 @@ class TestUninstall:
 
         paths = _make_paths(tmp_path)
         paths.botwerk_home.mkdir(parents=True)
-        _write_config(paths, {"telegram_token": "x", "allowed_user_ids": [1]})
+        _write_config(paths, {"provider": "claude"})
         with (
             patch(f"{_LIFECYCLE}.resolve_paths", return_value=paths),
             patch("questionary.confirm") as mock_confirm,

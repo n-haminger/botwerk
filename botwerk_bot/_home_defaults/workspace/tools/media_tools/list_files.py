@@ -2,7 +2,7 @@
 """List received media files with optional filtering.
 
 Reads the auto-maintained _index.yaml in the media files directory.
-Searches both telegram_files/ and matrix_files/.
+Searches the media_files/ directory.
 
 Usage:
     python tools/media_tools/list_files.py
@@ -22,7 +22,7 @@ try:
 except ImportError:
     yaml = None  # type: ignore[assignment]
 
-_MEDIA_DIRS = ("telegram_files", "matrix_files")
+_MEDIA_DIRS = ("media_files",)
 
 
 def _get_base_dirs() -> list[Path]:

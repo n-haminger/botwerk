@@ -26,7 +26,7 @@ def build_media_prompt(
 ) -> str:
     """Build the prompt injected into the orchestrator for a received file.
 
-    Paths are relative to *workspace* so they work in both host and Docker.
+    Paths are relative to *workspace* for portability.
     """
     rel_path: Path | str = info.path
     with contextlib.suppress(ValueError):
@@ -40,20 +40,20 @@ def build_media_prompt(
         f"Type: {info.media_type}",
         f"Original filename: {info.file_name}",
         "",
-        "Check tools/telegram_tools/CLAUDE.md for file handling instructions.",
+        "Check tools/media_tools/CLAUDE.md for file handling instructions.",
     ]
 
     if info.original_type in ("voice", "audio"):
         lines.append(
             "This is an audio/voice message. Use "
-            f"tools/telegram_tools/transcribe_audio.py --file {rel_path} "
+            f"tools/media_tools/transcribe_audio.py --file {rel_path} "
             "to transcribe it, then respond to the content."
         )
 
     if info.original_type in ("video", "video_note"):
         lines.append(
             "This is a video file. Use "
-            f"tools/telegram_tools/process_video.py --file {rel_path} "
+            f"tools/media_tools/process_video.py --file {rel_path} "
             "to extract keyframes and transcribe audio, then respond to the content."
         )
 

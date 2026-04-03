@@ -17,7 +17,6 @@ from botwerk_bot.cli.base import (
     BaseCLI,
     CLIConfig,
     _feed_stdin_and_close,
-    docker_wrap,
     wrap_command,
 )
 from botwerk_bot.cli.gemini_events import (
@@ -35,7 +34,6 @@ from botwerk_bot.cli.types import CLIResponse
 from botwerk_bot.config import NULLISH_TEXT_VALUES
 from botwerk_bot.infra.platform import CREATION_FLAGS as _CREATION_FLAGS
 from botwerk_bot.infra.process_tree import force_kill_process_tree
-from botwerk_bot.workspace.paths import resolve_paths
 
 if TYPE_CHECKING:
     from botwerk_bot.cli.process_registry import ProcessRegistry, TrackedProcess
@@ -44,9 +42,6 @@ if TYPE_CHECKING:
 logger = logging.getLogger(__name__)
 
 _DEFAULT_TIMEOUT = 300.0
-
-# Must match ``_BOTWERK_MOUNT`` in ``botwerk_bot.infra.docker``.
-_CONTAINER_DUCTOR = "/botwerk"
 
 
 @dataclass(slots=True)
@@ -74,12 +69,8 @@ class GeminiCLI(BaseCLI):
         self._config = config
         self._working_dir = Path(config.working_dir).resolve()
 
-        if config.docker_container:
-            self._cli: str = "gemini"
-            self._cli_js: str | None = None
-        else:
-            self._cli = find_gemini_cli()
-            self._cli_js = find_gemini_cli_js()
+        self._cli: str = find_gemini_cli()
+        self._cli_js: str | None = find_gemini_cli_js()
 
         logger.info("GeminiCLI: cwd=%s model=%s", self._working_dir, config.model)
 
@@ -314,64 +305,13 @@ class GeminiCLI(BaseCLI):
             yield event
 
     def _create_system_prompt_path(self) -> str | None:
-        """Create a temporary system prompt file when prompt content is present.
-
-        In Docker mode the file is written to ``~/.botwerk/tmp/`` which is
-        bind-mounted into the container so it can be read via a translated
-        container-side path.
-        """
+        """Create a temporary system prompt file when prompt content is present."""
         if not (self._config.system_prompt or self._config.append_system_prompt):
             return None
-        directory: str | None = None
-        if self._config.docker_container:
-            tmp_dir = resolve_paths().botwerk_home / "tmp"
-            tmp_dir.mkdir(parents=True, exist_ok=True)
-            directory = str(tmp_dir)
         return create_system_prompt_file(
             self._config.system_prompt or "",
             self._config.append_system_prompt or "",
-            directory=directory,
         )
-
-    def _docker_extra_env(self, system_prompt_path: str | None = None) -> dict[str, str]:
-        """Build Docker ``-e`` flags for Gemini-specific env vars.
-
-        These are injected into the container via ``docker exec -e``.
-        """
-        extra: dict[str, str] = {"GEMINI_IDE_ENABLED": "false"}
-
-        # Forward host GEMINI_API_KEY if set, otherwise inject from config.
-        host_key = os.environ.get("GEMINI_API_KEY", "").strip()
-        if host_key and host_key.lower() not in NULLISH_TEXT_VALUES:
-            extra["GEMINI_API_KEY"] = host_key
-        else:
-            key = (self._config.gemini_api_key or "").strip()
-            if key and key.lower() not in NULLISH_TEXT_VALUES:
-                settings = _gemini_settings_path(dict(os.environ))
-                if gemini_api_key_mode_selected(settings):
-                    extra["GEMINI_API_KEY"] = key
-
-        # Forward Google Cloud auth vars when present on host.
-        for var in ("GOOGLE_GENAI_USE_GCA", "GOOGLE_GENAI_USE_VERTEXAI"):
-            val = os.environ.get(var, "").strip()
-            if val:
-                extra[var] = val
-
-        # Translate system prompt path to container-side path.
-        if system_prompt_path:
-            container_path = self._host_to_container_path(system_prompt_path)
-            if container_path:
-                extra["GEMINI_SYSTEM_MD"] = container_path
-
-        return extra
-
-    @staticmethod
-    def _host_to_container_path(host_path: str) -> str | None:
-        """Translate a host path under ``~/.botwerk/`` to its container mount."""
-        prefix = str(resolve_paths().botwerk_home)
-        if host_path.startswith(prefix):
-            return _CONTAINER_DUCTOR + host_path[len(prefix) :].replace("\\", "/")
-        return None
 
     def _resolve_exec(
         self,
@@ -380,17 +320,8 @@ class GeminiCLI(BaseCLI):
     ) -> tuple[list[str], str | None, dict[str, str] | None]:
         """Resolve command, cwd, and env for subprocess execution.
 
-        Returns ``(exec_cmd, use_cwd, subprocess_env)``.  In Docker mode
-        ``subprocess_env`` is ``None`` (inherit host env for the ``docker``
-        binary) and Gemini-specific vars are forwarded via ``-e`` flags.
+        Returns ``(exec_cmd, use_cwd, subprocess_env)``.
         """
-        if self._config.docker_container:
-            extra_env = self._docker_extra_env(system_prompt_path)
-            exec_cmd, use_cwd = docker_wrap(
-                cmd, self._config, extra_env=extra_env, interactive=True
-            )
-            return exec_cmd, use_cwd, None
-
         env = self._prepare_env(system_prompt_path)
         exec_cmd, use_cwd = wrap_command(cmd, self._config)
         return exec_cmd, use_cwd, env

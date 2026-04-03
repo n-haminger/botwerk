@@ -41,8 +41,7 @@ def test_envelope_defaults() -> None:
     assert env.lock_mode == LockMode.NONE
     assert env.needs_injection is False
     assert env.metadata == {}
-    assert env.reply_to_message_id is None
-    assert env.thread_id is None
+    assert env.topic_id is None
     assert env.envelope_id == ""
     assert env.elapsed_seconds == 0.0
     assert env.provider == ""

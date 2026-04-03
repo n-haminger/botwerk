@@ -1,6 +1,6 @@
 """Supervisor: watches for file changes, manages child process lifecycle.
 
-Starts the Telegram bot as a child process and restarts it on:
+Starts the bot as a child process and restarts it on:
 - Python file changes in botwerk_bot/ (hot-reload via watchfiles)
 - Exit code 42 (agent-requested restart)
 - Crashes (with exponential backoff)

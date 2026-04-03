@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import asyncio
-import json
 import os
 import shutil
 import subprocess
@@ -43,32 +42,13 @@ def _stop_service_if_running() -> None:
             stop_service(_console)
 
 
-def _stop_docker_container(container_name: str) -> None:
-    """Stop and remove a Docker container."""
-    if not shutil.which("docker"):
-        return
-    _console.print(f"[dim]Stopping Docker container '{container_name}'...[/dim]")
-    subprocess.run(
-        ["docker", "stop", "-t", "5", container_name],
-        capture_output=True,
-        check=False,
-    )
-    subprocess.run(
-        ["docker", "rm", "-f", container_name],
-        capture_output=True,
-        check=False,
-    )
-    _console.print("[green]Docker container stopped.[/green]")
-
-
 def stop_bot() -> None:
-    """Stop all running botwerk instances and Docker container.
+    """Stop all running botwerk instances.
 
     1. Stop the system service (prevents Task Scheduler/systemd/launchd respawn)
     2. Kill the PID-file instance
     3. Kill any remaining botwerk processes system-wide
     4. Wait for file locks to release (Windows only)
-    5. Stop Docker container if enabled
     """
     from botwerk_bot.infra.pidlock import _is_process_alive, _kill_and_wait
 
@@ -109,24 +89,12 @@ def stop_bot() -> None:
     if is_windows() and stopped:
         time.sleep(1.0)
 
-    # 5. Stop Docker container if enabled in config
-    config_path = paths.config_path
-    if config_path.exists():
-        try:
-            data = json.loads(config_path.read_text(encoding="utf-8"))
-            docker = data.get("docker", {})
-            if isinstance(docker, dict) and docker.get("enabled"):
-                container = str(docker.get("container_name", "botwerk-sandbox"))
-                _stop_docker_container(container)
-        except (json.JSONDecodeError, OSError):
-            pass
-
 
 def start_bot(verbose: bool = False) -> None:
-    """Load config and start the Telegram bot."""
+    """Load config and start the bot."""
     import logging
 
-    from botwerk_bot.__main__ import load_config, run_telegram
+    from botwerk_bot.__main__ import load_config, run_bot
     from botwerk_bot.logging_config import setup_logging
 
     paths = resolve_paths()
@@ -137,7 +105,7 @@ def start_bot(verbose: bool = False) -> None:
         if config_level != logging.INFO:
             setup_logging(level=config_level, log_dir=paths.logs_dir)
     try:
-        exit_code = asyncio.run(run_telegram(config))
+        exit_code = asyncio.run(run_bot(config))
     except KeyboardInterrupt:
         exit_code = 0
     if exit_code == EXIT_RESTART:
@@ -155,7 +123,7 @@ def cmd_restart() -> None:
 
 
 def uninstall() -> None:
-    """Full uninstall: stop bot, remove Docker, delete workspace, uninstall package."""
+    """Full uninstall: stop bot, delete workspace, uninstall package."""
     import questionary
 
     _console.print()
@@ -163,9 +131,8 @@ def uninstall() -> None:
         Panel(
             "[bold red]This will permanently remove botwerk from your system.[/bold red]\n\n"
             "  1. Stop the running bot (if active)\n"
-            "  2. Remove Docker container and image (if used)\n"
-            "  3. Delete all data in ~/.botwerk/\n"
-            "  4. Uninstall the botwerk package",
+            "  2. Delete all data in ~/.botwerk/\n"
+            "  3. Uninstall the botwerk package",
             title="[bold red]Uninstall botwerk[/bold red]",
             border_style="red",
             padding=(1, 2),
@@ -180,28 +147,11 @@ def uninstall() -> None:
         _console.print("\n[dim]Uninstall cancelled.[/dim]\n")
         return
 
-    # 1. Stop bot + Docker container + all botwerk processes
+    # 1. Stop bot and all botwerk processes
     stop_bot()
 
-    # 2. Remove Docker image
+    # 2. Delete workspace
     paths = resolve_paths()
-    if paths.config_path.exists():
-        try:
-            data = json.loads(paths.config_path.read_text(encoding="utf-8"))
-            docker = data.get("docker", {})
-            if isinstance(docker, dict) and docker.get("enabled") and shutil.which("docker"):
-                image = str(docker.get("image_name", "botwerk-sandbox"))
-                _console.print(f"[dim]Removing Docker image '{image}'...[/dim]")
-                subprocess.run(
-                    ["docker", "rmi", image],
-                    capture_output=True,
-                    check=False,
-                )
-                _console.print("[green]Docker image removed.[/green]")
-        except (json.JSONDecodeError, OSError):
-            pass
-
-    # 3. Delete workspace
     botwerk_home = paths.botwerk_home
     if botwerk_home.exists():
         robust_rmtree(botwerk_home)

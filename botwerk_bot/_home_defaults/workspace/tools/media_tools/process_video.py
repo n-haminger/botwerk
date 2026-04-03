@@ -19,9 +19,9 @@ import subprocess
 import sys
 from pathlib import Path
 
-_TELEGRAM_FILES = Path(
+_MEDIA_FILES = Path(
     os.environ.get("BOTWERK_HOME", str(Path.home() / ".botwerk"))
-).expanduser() / "workspace" / "telegram_files"
+).expanduser() / "workspace" / "media_files"
 
 _MAX_FRAMES_DEFAULT = 8
 _MAX_FRAMES_HARD = 16
@@ -254,8 +254,8 @@ def main() -> None:
     args = parser.parse_args()
 
     path = Path(args.file).resolve()
-    if not path.is_relative_to(_TELEGRAM_FILES.resolve()):
-        print(json.dumps({"error": f"Path outside telegram_files: {path}"}))
+    if not path.is_relative_to(_MEDIA_FILES.resolve()):
+        print(json.dumps({"error": f"Path outside media_files: {path}"}))
         sys.exit(1)
     if not path.exists():
         print(json.dumps({"error": f"File not found: {path}"}))

@@ -19,8 +19,7 @@ _BOTWERK_HOME = Path(
 ).expanduser()
 
 _MEDIA_DIRS = (
-    _BOTWERK_HOME / "workspace" / "telegram_files",
-    _BOTWERK_HOME / "workspace" / "matrix_files",
+    _BOTWERK_HOME / "workspace" / "media_files",
     _BOTWERK_HOME / "workspace" / "api_files",
 )
 

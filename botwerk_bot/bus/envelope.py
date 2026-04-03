@@ -68,10 +68,6 @@ class Envelope:
     # -- Origin-specific metadata --
     metadata: dict[str, Any] = field(default_factory=dict)
 
-    # -- Telegram-specific --
-    reply_to_message_id: int | None = None
-    thread_id: int | None = None
-
     # -- Tracking --
     envelope_id: str = ""
     created_at: float = field(default_factory=time.time)

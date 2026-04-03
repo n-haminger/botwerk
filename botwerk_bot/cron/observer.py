@@ -256,7 +256,7 @@ class CronObserver(BaseTaskObserver):
     async def _deliver_result(
         self, job_id: str, job_title: str, result_text: str, status: str
     ) -> None:
-        """Send result to the external handler (e.g. Telegram).
+        """Send result to the external handler (e.g. message bus).
 
         Uses *job_title* (computed at execution start) so delivery works even
         if the job was removed from the manager mid-execution.
@@ -327,7 +327,7 @@ class CronObserver(BaseTaskObserver):
         # Deliver result BEFORE writing run-status to disk.  The file
         # write can trigger the file-watcher which reschedules (and
         # cancels) running tasks.  Delivering first guarantees the
-        # Telegram message is sent even if the task is cancelled during
+        # Result message is sent even if the task is cancelled during
         # the subsequent file I/O.
         await self._deliver_result(job_id, job_title, result.result_text, result.status)
 

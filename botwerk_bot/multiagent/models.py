@@ -13,9 +13,7 @@ from botwerk_bot.config import (
     ApiConfig,
     CleanupConfig,
     CLIParametersConfig,
-    DockerConfig,
     HeartbeatConfig,
-    MatrixConfig,
     StreamingConfig,
     WebhookConfig,
 )
@@ -24,21 +22,11 @@ from botwerk_bot.config import (
 class SubAgentConfig(BaseModel):
     """Minimal sub-agent definition from agents.json.
 
-    Only ``name`` is strictly required. Telegram agents need ``telegram_token``
-    and ``allowed_user_ids``; Matrix agents need ``matrix`` config.
+    Only ``name`` is strictly required.
     All other fields are optional and inherit from the main agent config.
     """
 
     name: str
-    transport: str = "telegram"  # "telegram" | "matrix"
-
-    # Telegram credentials (required when transport=telegram)
-    telegram_token: str = ""
-    allowed_user_ids: list[int] | None = None
-    allowed_group_ids: list[int] | None = None
-
-    # Matrix credentials (required when transport=matrix)
-    matrix: MatrixConfig | None = None
 
     # Group behaviour
     group_mention_only: bool | None = None
@@ -59,7 +47,6 @@ class SubAgentConfig(BaseModel):
     reasoning_effort: str | None = None
     file_access: str | None = None
     streaming: StreamingConfig | None = None
-    docker: DockerConfig | None = None
     heartbeat: HeartbeatConfig | None = None
     cleanup: CleanupConfig | None = None
     webhooks: WebhookConfig | None = None
@@ -100,12 +87,6 @@ def merge_sub_agent_config(
     base["botwerk_home"] = str(agent_home)
     if sub.linux_user:
         base["linux_user"] = f"botwerk-{sub.name}"
-    base["transport"] = sub.transport
-    base["telegram_token"] = sub.telegram_token
-    base["allowed_user_ids"] = sub.allowed_user_ids or []
-    base["allowed_group_ids"] = sub.allowed_group_ids or []
-    if sub.matrix is not None:
-        base["matrix"] = sub.matrix.model_dump()
 
     # Carry the agent secret through to the merged config for CLI injection.
     base["agent_secret"] = sub.agent_secret

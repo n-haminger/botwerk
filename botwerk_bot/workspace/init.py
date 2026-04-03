@@ -314,19 +314,6 @@ def init_workspace(paths: BotwerkPaths) -> None:
 # Runtime environment injection
 # ---------------------------------------------------------------------------
 
-_DOCKER_NOTICE = """
-
----
-
-## Runtime Environment
-
-**IMPORTANT: YOU ARE RUNNING INSIDE A DOCKER CONTAINER (`{container}`).**
-
-- Your filesystem is isolated. `/botwerk` is the mounted host directory `~/.botwerk`.
-- You cannot see or access the host system outside this mount.
-- Feel free to experiment -- the host is protected.
-"""
-
 _HOST_NOTICE = """
 
 ---
@@ -344,44 +331,17 @@ _HOST_NOTICE = """
 # Transport-specific messenger rules
 # ---------------------------------------------------------------------------
 
-_TRANSPORT_TELEGRAM = """
+_TRANSPORT_WEBUI = """
 
 ---
 
 ## Messenger Rules
 
-- Replies are Telegram messages (4096-char limit; auto-split is handled).
-- Keep responses mobile-friendly and structured.
-- To send files, use `<file:/absolute/path>`.
-- Save generated deliverables in `output_to_user/`.
-- Do not suggest GUI-only actions like `xdg-open`.
-
-### Quick Reply Buttons
-
-Use button syntax at the end of messages:
-
-- `[button:Label]` markers
-- same line = one row
-- new line = new row
-
-Keep labels short. Callback data is truncated to 64 bytes by the framework.
-Do not place button markers inside code blocks.
-"""
-
-_TRANSPORT_MATRIX = """
-
----
-
-## Messenger Rules
-
-- Replies are Matrix messages (no hard character limit, but keep responses readable).
-- Messages are formatted as HTML (Markdown is auto-converted by the framework).
+- Replies are displayed in the Web UI (no hard character limit, but keep responses readable).
+- Messages are formatted as Markdown (rendered by the Web UI).
 - Keep responses structured and scannable.
 - To send files, use `<file:/absolute/path>`.
 - Save generated deliverables in `output_to_user/`.
-- Do not suggest GUI-only actions like `xdg-open`.
-- Commands use `!` prefix (e.g. `!help`, `!status`). \
-`/` also works but may conflict with Element's built-in commands.
 
 ### Quick Reply Buttons
 
@@ -391,16 +351,9 @@ Use button syntax at the end of messages:
 - same line = one row
 - new line = new row
 
-In Matrix, buttons are rendered as a numbered text list. The user types \
-the label text (or number) to "press" a button — there are no clickable \
-inline buttons. Keep labels short and distinctive.
+Keep labels short and distinctive.
 Do not place button markers inside code blocks.
 """
-
-_TRANSPORT_RULES: dict[str, str] = {
-    "telegram": _TRANSPORT_TELEGRAM,
-    "matrix": _TRANSPORT_MATRIX,
-}
 
 # ---------------------------------------------------------------------------
 # Multi-Agent identity injection
@@ -416,7 +369,7 @@ _IDENTITY_MAIN = """
 
 - You are the primary agent and coordinator in a multi-agent system.
 - You can create, manage, and communicate with sub-agents.
-- Each sub-agent has its own **bot** with a separate chat (Telegram or Matrix).
+- Each sub-agent has its own **bot** with a separate chat.
 
 ### How the user interacts with sub-agents
 
@@ -461,7 +414,7 @@ _IDENTITY_SUB = """
 
 - You are a specialized sub-agent in a multi-agent system.
 - The main agent coordinates the overall system.
-- You have your own workspace, memory, and {transport} bot.
+- You have your own workspace, memory, and chat interface.
 
 ### Communication Tools
 
@@ -490,30 +443,25 @@ inter-agent sessions.
 """
 
 
-def _build_identity_notice(agent_name: str, transport: str) -> str:
+def _build_identity_notice(agent_name: str) -> str:
     """Build the identity section for rule files."""
     if agent_name == "main":
         return _IDENTITY_MAIN.format(name=agent_name)
-    transport_label = transport.capitalize()  # "telegram" → "Telegram"
-    return _IDENTITY_SUB.format(name=agent_name, transport=transport_label)
+    return _IDENTITY_SUB.format(name=agent_name)
 
 
 def inject_runtime_environment(
     paths: BotwerkPaths,
     *,
-    docker_container: str,
     agent_name: str = "main",
-    transport: str = "telegram",
+    transport: str = "webui",
 ) -> None:
     """Append transport rules, agent identity, and runtime environment to rule files.
 
-    Called once after workspace init when the Docker state and transport are known.
+    Called once after workspace init when the transport is known.
     """
-    env_notice = (
-        _DOCKER_NOTICE.format(container=docker_container) if docker_container else _HOST_NOTICE
-    )
-    identity_notice = _build_identity_notice(agent_name, transport)
-    transport_notice = _TRANSPORT_RULES.get(transport, _TRANSPORT_TELEGRAM)
+    identity_notice = _build_identity_notice(agent_name)
+    transport_notice = _TRANSPORT_WEBUI
 
     for name in _RULE_FILE_NAMES:
         target = paths.workspace / name
@@ -523,10 +471,9 @@ def inject_runtime_environment(
         # Avoid duplicate injection on restart without workspace re-init
         if "## Multi-Agent Identity" in content or "## Runtime Environment" in content:
             continue
-        atomic_text_save(target, content + transport_notice + identity_notice + env_notice)
+        atomic_text_save(target, content + transport_notice + identity_notice + _HOST_NOTICE)
     logger.info(
-        "Runtime environment injected: %s agent=%s transport=%s",
-        "docker" if docker_container else "host",
+        "Runtime environment injected: agent=%s transport=%s",
         agent_name,
         transport,
     )

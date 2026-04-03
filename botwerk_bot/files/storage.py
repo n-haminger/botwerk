@@ -43,7 +43,7 @@ def prepare_destination(base_dir: Path, file_name: str) -> Path:
 def update_index(base_dir: Path) -> None:
     """Rebuild ``_index.yaml`` by scanning all date subdirectories.
 
-    Works for any transport's file directory (Telegram, Matrix, API).
+    Works for any transport's file directory (media, API).
     """
     import yaml
 

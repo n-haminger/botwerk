@@ -204,32 +204,6 @@ def agents_add(rest: list[str]) -> None:
     if name is None:
         return
 
-    token: str | None = questionary.text(
-        f"Telegram bot token for '{name}':",
-    ).ask()
-    if not token or not token.strip():
-        _console.print("[dim]Cancelled.[/dim]")
-        return
-
-    users_raw: str | None = questionary.text(
-        "Allowed user IDs (comma-separated):",
-    ).ask()
-    if users_raw is None:
-        _console.print("[dim]Cancelled.[/dim]")
-        return
-
-    user_ids = _parse_int_list(users_raw)
-
-    groups_raw: str | None = questionary.text(
-        "Allowed group IDs (comma-separated, leave empty for none):",
-        default="",
-    ).ask()
-    if groups_raw is None:
-        _console.print("[dim]Cancelled.[/dim]")
-        return
-
-    group_ids = _parse_int_list(groups_raw, allow_negative=True)
-
     provider: str | None = questionary.select(
         "Provider:",
         choices=["claude", "codex", "gemini"],
@@ -249,9 +223,6 @@ def agents_add(rest: list[str]) -> None:
 
     new_agent: dict[str, object] = {
         "name": name,
-        "telegram_token": token.strip(),
-        "allowed_user_ids": user_ids,
-        "allowed_group_ids": group_ids,
         "provider": provider,
         "model": model.strip(),
     }

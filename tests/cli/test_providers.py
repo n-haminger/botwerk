@@ -5,32 +5,12 @@ from __future__ import annotations
 from pathlib import Path
 from typing import TYPE_CHECKING
 
-from botwerk_bot.cli.base import CLIConfig, docker_wrap
+from botwerk_bot.cli.base import CLIConfig
 from botwerk_bot.cli.claude_provider import ClaudeCodeCLI
 from botwerk_bot.cli.codex_provider import CodexCLI
 
 if TYPE_CHECKING:
     import pytest
-
-# -- docker_wrap --
-
-
-def test_docker_wrap_without_container(tmp_path: Path) -> None:
-    cmd = ["claude", "-p", "hello"]
-    cfg = CLIConfig(docker_container="", chat_id=0, working_dir=str(tmp_path))
-    result_cmd, cwd = docker_wrap(cmd, cfg)
-    assert result_cmd == cmd
-    assert cwd == str(tmp_path)
-
-
-def test_docker_wrap_with_container(tmp_path: Path) -> None:
-    cmd = ["claude", "-p", "hello"]
-    cfg = CLIConfig(docker_container="my-container", chat_id=42, working_dir=str(tmp_path))
-    result_cmd, cwd = docker_wrap(cmd, cfg)
-    assert result_cmd[0] == "docker"
-    assert "my-container" in result_cmd
-    assert "BOTWERK_CHAT_ID=42" in result_cmd
-    assert cwd is None
 
 
 # -- ClaudeCodeCLI command building --

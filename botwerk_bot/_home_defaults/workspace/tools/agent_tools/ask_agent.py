@@ -5,7 +5,7 @@ Blocks until the sub-agent responds. The response is returned as stdout
 to the calling CLI process (your tool output).
 
 The response ALWAYS comes back to YOU (the calling agent). There is no way
-to make the sub-agent reply in its own Telegram chat via this tool.
+to make the sub-agent reply in its own chat via this tool.
 
 Uses the internal localhost HTTP API to communicate with the bus.
 Environment variables BOTWERK_AGENT_NAME, BOTWERK_INTERAGENT_PORT, and

@@ -87,11 +87,20 @@ class TestStripAckToken:
 # ---------------------------------------------------------------------------
 
 
+_DEFAULT_CHAT_IDS = [100, 200]
+
+
 def _make_config(*, enabled: bool = True, interval: int = 30) -> AgentConfig:
     return AgentConfig(
         heartbeat=HeartbeatConfig(enabled=enabled, interval_minutes=interval),
-        allowed_user_ids=[100, 200],
     )
+
+
+def _make_observer(*, enabled: bool = True, interval: int = 30) -> HeartbeatObserver:
+    config = _make_config(enabled=enabled, interval=interval)
+    obs = HeartbeatObserver(config)
+    obs.set_chat_ids(_DEFAULT_CHAT_IDS)
+    return obs
 
 
 class TestHeartbeatObserverSetup:
@@ -121,8 +130,7 @@ class TestHeartbeatObserverSetup:
 
 class TestHeartbeatObserverTick:
     async def test_tick_calls_handler_for_each_user(self) -> None:
-        config = _make_config()
-        obs = HeartbeatObserver(config)
+        obs = _make_observer()
         handler = AsyncMock(return_value=None)
         obs.set_heartbeat_handler(handler)
 
@@ -134,8 +142,7 @@ class TestHeartbeatObserverTick:
         handler.assert_any_await(200)
 
     async def test_tick_skips_busy_chat(self) -> None:
-        config = _make_config()
-        obs = HeartbeatObserver(config)
+        obs = _make_observer()
         handler = AsyncMock(return_value=None)
         obs.set_heartbeat_handler(handler)
         obs.set_busy_check(lambda cid: cid == 100)
@@ -146,8 +153,7 @@ class TestHeartbeatObserverTick:
         handler.assert_awaited_once_with(200)
 
     async def test_tick_delivers_alert(self) -> None:
-        config = _make_config()
-        obs = HeartbeatObserver(config)
+        obs = _make_observer()
         obs.set_heartbeat_handler(AsyncMock(return_value="Hey, check this out!"))
         result_handler = AsyncMock()
         obs.set_result_handler(result_handler)
@@ -184,8 +190,7 @@ class TestHeartbeatObserverTick:
         handler.assert_not_awaited()
 
     async def test_tick_runs_during_active_hours(self) -> None:
-        config = _make_config()
-        obs = HeartbeatObserver(config)
+        obs = _make_observer()
         handler = AsyncMock(return_value=None)
         obs.set_heartbeat_handler(handler)
 

@@ -36,12 +36,6 @@
         "append_mode": false,
         "sentence_break": true
     },
-    "docker": {
-        "enabled": false,
-        "image_name": "botwerk-sandbox",
-        "container_name": "botwerk-sandbox",
-        "auto_build": true
-    },
     "cleanup": {
         "enabled": true,
         "media_files_days": 30,

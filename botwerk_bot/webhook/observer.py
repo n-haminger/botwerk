@@ -38,7 +38,7 @@ class WebhookObserver(BaseTaskObserver):
     """Manages webhook server lifecycle and dispatches incoming hooks.
 
     Watches ``webhooks.json`` mtime for changes (like CronObserver).
-    Starts/stops the aiohttp server based on ``config.webhooks.enabled``.
+    Starts/stops the HTTP server based on ``config.webhooks.enabled``.
     """
 
     def __init__(
@@ -54,6 +54,7 @@ class WebhookObserver(BaseTaskObserver):
         self._server: WebhookServer | None = None
         self._on_result: WebhookResultCallback | None = None
         self._handle_wake: WakeHandler | None = None
+        self._chat_ids: list[int] = []
         self._running = False
         self._watcher = FileWatcher(
             paths.webhooks_path,
@@ -61,12 +62,16 @@ class WebhookObserver(BaseTaskObserver):
         )
 
     def set_result_handler(self, handler: WebhookResultCallback) -> None:
-        """Set callback for delivering webhook results to Telegram."""
+        """Set callback for delivering webhook results."""
         self._on_result = handler
 
     def set_wake_handler(self, handler: WakeHandler) -> None:
         """Set the function that executes a wake turn (orchestrator.handle_webhook_wake)."""
         self._handle_wake = handler
+
+    def set_chat_ids(self, chat_ids: list[int]) -> None:
+        """Set the chat IDs for wake dispatch (injected by transport)."""
+        self._chat_ids = chat_ids
 
     async def start(self) -> None:
         """Start the webhook server and file watcher."""
@@ -214,7 +219,8 @@ class WebhookObserver(BaseTaskObserver):
             )
 
         results: list[str] = []
-        for chat_id in self._config.allowed_user_ids:
+        chat_ids = self._chat_ids or [1]
+        for chat_id in chat_ids:
             try:
                 text = await self._handle_wake(chat_id, prompt)
                 if text:

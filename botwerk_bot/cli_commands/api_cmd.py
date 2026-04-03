@@ -84,10 +84,23 @@ def api_install_hint() -> str:
     return "pip install botwerk[api]"
 
 
+def _read_config() -> tuple[object, dict[str, object]] | None:
+    """Read and return (config_path, data) or None on failure."""
+    paths = resolve_paths()
+    config_path = paths.config_path
+    if not config_path.exists():
+        _console.print("[bold red]Config not found.[/bold red] Run [bold]botwerk[/bold] first.")
+        return None
+    try:
+        data = json.loads(config_path.read_text(encoding="utf-8"))
+    except (json.JSONDecodeError, OSError):
+        _console.print("[bold red]Failed to read config.[/bold red]")
+        return None
+    return config_path, data
+
+
 def api_enable() -> None:
     """Enable the API server: check deps, write config, generate token."""
-    from botwerk_bot.cli_commands.docker import docker_read_config
-
     if not nacl_available():
         hint = api_install_hint()
         _console.print(
@@ -102,7 +115,7 @@ def api_enable() -> None:
         )
         return
 
-    result = docker_read_config()
+    result = _read_config()
     if result is None:
         return
     config_path, data = result
@@ -141,9 +154,7 @@ def api_enable() -> None:
 
 def api_disable() -> None:
     """Disable the API server in config."""
-    from botwerk_bot.cli_commands.docker import docker_read_config
-
-    result = docker_read_config()
+    result = _read_config()
     if result is None:
         return
     config_path, data = result

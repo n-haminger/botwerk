@@ -1,12 +1,11 @@
 """Shared cron result sanitisation logic.
 
-Used by both Telegram and Matrix transport adapters to strip
-transport-level acknowledgement lines from cron output.
+Strips transport-level acknowledgement lines from cron output.
 """
 
 from __future__ import annotations
 
-_CRON_ACK_MARKERS = ("message sent successfully", "delivered to telegram")
+_CRON_ACK_MARKERS = ("message sent successfully",)
 
 
 def is_cron_transport_ack_line(line: str) -> bool:

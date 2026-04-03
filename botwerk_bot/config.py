@@ -58,18 +58,6 @@ class StreamingConfig(BaseModel):
     sentence_break: bool = True
 
 
-class DockerConfig(BaseModel):
-    """Settings for Docker-based CLI sandboxing."""
-
-    enabled: bool = False
-    image_name: str = "botwerk-sandbox"
-    container_name: str = "botwerk-sandbox"
-    auto_build: bool = True
-    mount_host_cache: bool = False
-    mounts: list[str] = Field(default_factory=list)
-    extras: list[str] = Field(default_factory=list)
-
-
 _DEFAULT_HEARTBEAT_PROMPT = (
     "You are running as a background heartbeat check. Review the current workspace context:\n"
     "- Read memory_system/MAINMEMORY.md for user interests and personality\n"
@@ -113,6 +101,10 @@ class CleanupConfig(BaseModel):
             data["media_files_days"] = data.pop("telegram_files_days")  # type: ignore[union-attr]
         elif "telegram_files_days" in data:
             data.pop("telegram_files_days")  # type: ignore[union-attr]
+        # Backwards compat: silently drop removed Telegram/Matrix fields.
+        for _legacy in ("telegram_token", "allowed_user_ids", "allowed_group_ids",
+                        "transport", "matrix"):
+            data.pop(_legacy, None)  # type: ignore[union-attr]
         super().__init__(**data)
 
 
@@ -123,18 +115,6 @@ class CLIParametersConfig(BaseModel):
     codex: list[str] = Field(default_factory=list)
     gemini: list[str] = Field(default_factory=list)
 
-
-class MatrixConfig(BaseModel):
-    """Matrix homeserver connection settings."""
-
-    homeserver: str = ""  # https://matrix.myserver.com
-    user_id: str = ""  # @botwerk:myserver.com
-    password: str = ""  # for initial login
-    access_token: str = ""  # persisted after first login
-    device_id: str = ""  # persisted after first login
-    allowed_rooms: list[str] = Field(default_factory=list)  # ["!abc:server", "#room:server"]
-    allowed_users: list[str] = Field(default_factory=list)  # ["@user:server"]
-    store_path: str = "matrix_store"  # relative to botwerk_home
 
 
 class MemoryConfig(BaseModel):
@@ -192,7 +172,7 @@ class ApiConfig(BaseModel):
     the server still starts but logs a prominent warning.
 
     ``chat_id`` controls which session the API client uses.
-    ``0`` means "use the first ``allowed_user_ids`` entry".
+    ``0`` means "use the default chat ID (1)".
     """
 
     enabled: bool = False
@@ -269,7 +249,6 @@ class AgentConfig(BaseModel):
     file_access: str = "all"
     gemini_api_key: str | None = None
     streaming: StreamingConfig = Field(default_factory=StreamingConfig)
-    docker: DockerConfig = Field(default_factory=DockerConfig)
     heartbeat: HeartbeatConfig = Field(default_factory=HeartbeatConfig)
     cleanup: CleanupConfig = Field(default_factory=CleanupConfig)
     webhooks: WebhookConfig = Field(default_factory=WebhookConfig)
@@ -281,11 +260,6 @@ class AgentConfig(BaseModel):
     user_timezone: str = ""
     group_mention_only: bool = False
     interagent_port: int = 8799
-    transport: str = "telegram"  # "telegram" | "matrix"
-    telegram_token: str = ""
-    allowed_user_ids: list[int] = Field(default_factory=list)
-    allowed_group_ids: list[int] = Field(default_factory=list)
-    matrix: MatrixConfig = Field(default_factory=MatrixConfig)
     linux_user: str = ""  # Linux user for CLI subprocess isolation (empty = disabled)
     agent_secret: str = ""  # Inter-agent auth token (set by supervisor, not config.json)
 

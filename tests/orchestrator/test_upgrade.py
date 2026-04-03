@@ -1,4 +1,4 @@
-"""Tests for /upgrade Telegram command."""
+"""Tests for /upgrade command."""
 
 from __future__ import annotations
 

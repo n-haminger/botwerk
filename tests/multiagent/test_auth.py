@@ -9,10 +9,11 @@ Covers:
 
 from __future__ import annotations
 
+from typing import TYPE_CHECKING
 from unittest.mock import AsyncMock, MagicMock
 
 import pytest
-from aiohttp.test_utils import TestClient, TestServer
+from httpx import ASGITransport, AsyncClient
 
 from botwerk_bot.multiagent.auth import AgentACL, AgentAuthRegistry
 from botwerk_bot.multiagent.bus import InterAgentBus
@@ -34,7 +35,6 @@ def _make_agent(
     """Create a SubAgentConfig with security fields."""
     return SubAgentConfig(
         name=name,
-        telegram_token=f"tok:{name}",
         agent_secret=secret,
         trust_level=trust_level,
         can_contact=can_contact or [],
@@ -103,7 +103,7 @@ class TestRegistryReload:
     def test_agent_without_secret_not_in_token_map(self) -> None:
         reg = AgentAuthRegistry()
         reg.reload([_make_agent("nosecret", secret="")])
-        # No token → not verifiable, but ACL still exists
+        # No token -> not verifiable, but ACL still exists
         assert reg.get_trust_level("nosecret") == "restricted"
 
 
@@ -259,7 +259,7 @@ class TestLinuxUserIsolation:
             name="iso",
             agent_secret="s-iso",
             linux_user=True,
-            can_contact=["*"],  # Explicitly set — should be overridden
+            can_contact=["*"],  # Explicitly set -- should be overridden
         )
         peer = SubAgentConfig(name="peer", agent_secret="s-peer")
         reg.reload([isolated, peer])
@@ -272,7 +272,7 @@ class TestLinuxUserIsolation:
             name="iso",
             agent_secret="s-iso",
             linux_user=True,
-            accept_from=["*"],  # Explicitly set — should be overridden
+            accept_from=["*"],  # Explicitly set -- should be overridden
         )
         peer = SubAgentConfig(name="peer", agent_secret="s-peer")
         reg.reload([isolated, peer])
@@ -407,129 +407,127 @@ def authed_api(authed_bus: InterAgentBus, auth_registry: AgentAuthRegistry) -> I
 
 
 @pytest.fixture
-async def authed_client(authed_api: InternalAgentAPI) -> TestClient:
-    server = TestServer(authed_api._app)
-    c = TestClient(server)
-    await c.start_server()
-    yield c
-    await c.close()
+async def authed_client(authed_api: InternalAgentAPI) -> AsyncClient:
+    transport = ASGITransport(app=authed_api._app)
+    async with AsyncClient(transport=transport, base_url="http://test") as client:
+        yield client
 
 
 class TestAPIAuthMissingHeader:
     """Request without Authorization header returns 401."""
 
-    async def test_send_without_auth_header(self, authed_client: TestClient) -> None:
+    async def test_send_without_auth_header(self, authed_client: AsyncClient) -> None:
         resp = await authed_client.post(
             "/interagent/send",
             json={"from": "sub1", "to": "sub2", "message": "hi"},
         )
-        assert resp.status == 401
-        data = await resp.json()
+        assert resp.status_code == 401
+        data = resp.json()
         assert data["success"] is False
         assert "Authorization" in data["error"]
 
-    async def test_send_async_without_auth_header(self, authed_client: TestClient) -> None:
+    async def test_send_async_without_auth_header(self, authed_client: AsyncClient) -> None:
         resp = await authed_client.post(
             "/interagent/send_async",
             json={"from": "sub1", "to": "sub2", "message": "hi"},
         )
-        assert resp.status == 401
+        assert resp.status_code == 401
 
 
 class TestAPIAuthInvalidToken:
     """Request with invalid token returns 401."""
 
-    async def test_send_with_bad_token(self, authed_client: TestClient) -> None:
+    async def test_send_with_bad_token(self, authed_client: AsyncClient) -> None:
         resp = await authed_client.post(
             "/interagent/send",
             json={"from": "sub1", "to": "sub2", "message": "hi"},
             headers={"Authorization": "Bearer wrong-token"},
         )
-        assert resp.status == 401
-        data = await resp.json()
+        assert resp.status_code == 401
+        data = resp.json()
         assert "Invalid" in data["error"]
 
 
 class TestAPIAuthSpoofedSender:
     """Request with valid token but spoofed sender returns 403."""
 
-    async def test_send_with_spoofed_sender(self, authed_client: TestClient) -> None:
+    async def test_send_with_spoofed_sender(self, authed_client: AsyncClient) -> None:
         # sub1's token used but claiming to be main
         resp = await authed_client.post(
             "/interagent/send",
             json={"from": "main", "to": "sub2", "message": "hi"},
             headers={"Authorization": "Bearer secret-sub1"},
         )
-        assert resp.status == 403
-        data = await resp.json()
+        assert resp.status_code == 403
+        data = resp.json()
         assert "mismatch" in data["error"]
 
-    async def test_send_async_with_spoofed_sender(self, authed_client: TestClient) -> None:
+    async def test_send_async_with_spoofed_sender(self, authed_client: AsyncClient) -> None:
         resp = await authed_client.post(
             "/interagent/send_async",
             json={"from": "main", "to": "sub2", "message": "hi"},
             headers={"Authorization": "Bearer secret-sub1"},
         )
-        assert resp.status == 403
+        assert resp.status_code == 403
 
 
 class TestAPIAuthACLDenied:
     """Request with valid token, correct sender, but ACL denied returns 403."""
 
-    async def test_send_acl_denied(self, authed_client: TestClient) -> None:
+    async def test_send_acl_denied(self, authed_client: AsyncClient) -> None:
         # sub2 has no can_contact entries, so cannot reach sub1
         resp = await authed_client.post(
             "/interagent/send",
             json={"from": "sub2", "to": "sub1", "message": "hi"},
             headers={"Authorization": "Bearer secret-sub2"},
         )
-        assert resp.status == 403
-        data = await resp.json()
+        assert resp.status_code == 403
+        data = resp.json()
         assert "blocked" in data["error"]
 
-    async def test_send_async_acl_denied(self, authed_client: TestClient) -> None:
+    async def test_send_async_acl_denied(self, authed_client: AsyncClient) -> None:
         resp = await authed_client.post(
             "/interagent/send_async",
             json={"from": "sub2", "to": "sub1", "message": "hi"},
             headers={"Authorization": "Bearer secret-sub2"},
         )
-        assert resp.status == 403
+        assert resp.status_code == 403
 
 
 class TestAPIAuthSuccess:
     """Request with valid token, correct sender, ACL allowed succeeds."""
 
-    async def test_send_authed_success(self, authed_client: TestClient) -> None:
+    async def test_send_authed_success(self, authed_client: AsyncClient) -> None:
         resp = await authed_client.post(
             "/interagent/send",
             json={"from": "sub1", "to": "sub2", "message": "hi"},
             headers={"Authorization": "Bearer secret-sub1"},
         )
-        assert resp.status == 200
-        data = await resp.json()
+        assert resp.status_code == 200
+        data = resp.json()
         assert data["success"] is True
         assert data["text"] == "from-sub2"
 
-    async def test_send_async_authed_success(self, authed_client: TestClient) -> None:
+    async def test_send_async_authed_success(self, authed_client: AsyncClient) -> None:
         resp = await authed_client.post(
             "/interagent/send_async",
             json={"from": "sub1", "to": "sub2", "message": "hi"},
             headers={"Authorization": "Bearer secret-sub1"},
         )
-        assert resp.status == 200
-        data = await resp.json()
+        assert resp.status_code == 200
+        data = resp.json()
         assert data["success"] is True
         assert "task_id" in data
 
-    async def test_main_agent_authed_send(self, authed_client: TestClient) -> None:
+    async def test_main_agent_authed_send(self, authed_client: AsyncClient) -> None:
         """Main agent with its token can reach any sub-agent."""
         resp = await authed_client.post(
             "/interagent/send",
             json={"from": "main", "to": "sub2", "message": "hi"},
             headers={"Authorization": "Bearer secret-main"},
         )
-        assert resp.status == 200
-        data = await resp.json()
+        assert resp.status_code == 200
+        data = resp.json()
         assert data["success"] is True
 
 
@@ -548,20 +546,18 @@ class TestAPINoAuthBackwardCompat:
         return InternalAgentAPI(noauth_bus, port=0)
 
     @pytest.fixture
-    async def noauth_client(self, noauth_api: InternalAgentAPI) -> TestClient:
-        server = TestServer(noauth_api._app)
-        c = TestClient(server)
-        await c.start_server()
-        yield c
-        await c.close()
+    async def noauth_client(self, noauth_api: InternalAgentAPI) -> AsyncClient:
+        transport = ASGITransport(app=noauth_api._app)
+        async with AsyncClient(transport=transport, base_url="http://test") as client:
+            yield client
 
-    async def test_send_without_auth_registry(self, noauth_client: TestClient) -> None:
+    async def test_send_without_auth_registry(self, noauth_client: AsyncClient) -> None:
         resp = await noauth_client.post(
             "/interagent/send",
             json={"from": "anyone", "to": "target", "message": "hi"},
         )
-        assert resp.status == 200
-        data = await resp.json()
+        assert resp.status_code == 200
+        data = resp.json()
         assert data["success"] is True
 
 
@@ -575,30 +571,30 @@ class TestSubAgentConfigSecurityDefaults:
 
     def test_agent_secret_auto_generated(self) -> None:
         """Missing agent_secret gets a random hex value."""
-        cfg = SubAgentConfig(name="test", telegram_token="tok:test")
+        cfg = SubAgentConfig(name="test")
         assert cfg.agent_secret  # non-empty
         assert len(cfg.agent_secret) == 64  # secrets.token_hex(32) = 64 hex chars
 
     def test_agent_secret_unique_per_instance(self) -> None:
-        cfg1 = SubAgentConfig(name="a", telegram_token="tok:a")
-        cfg2 = SubAgentConfig(name="b", telegram_token="tok:b")
+        cfg1 = SubAgentConfig(name="a")
+        cfg2 = SubAgentConfig(name="b")
         assert cfg1.agent_secret != cfg2.agent_secret
 
     def test_explicit_agent_secret_preserved(self) -> None:
-        cfg = SubAgentConfig(name="test", telegram_token="tok:test", agent_secret="my-secret")
+        cfg = SubAgentConfig(name="test", agent_secret="my-secret")
         assert cfg.agent_secret == "my-secret"
 
     def test_default_trust_level_is_restricted(self) -> None:
-        cfg = SubAgentConfig(name="test", telegram_token="tok:test")
+        cfg = SubAgentConfig(name="test")
         assert cfg.trust_level == "restricted"
 
     def test_default_accept_from_is_empty(self) -> None:
-        """Empty default — reload() decides open vs isolated based on linux_user."""
-        cfg = SubAgentConfig(name="test", telegram_token="tok:test")
+        """Empty default -- reload() decides open vs isolated based on linux_user."""
+        cfg = SubAgentConfig(name="test")
         assert cfg.accept_from == []
 
     def test_default_can_contact_is_empty(self) -> None:
-        cfg = SubAgentConfig(name="test", telegram_token="tok:test")
+        cfg = SubAgentConfig(name="test")
         assert cfg.can_contact == []
 
     def test_security_fields_excluded_from_merge(self) -> None:
@@ -611,13 +607,10 @@ class TestSubAgentConfigSecurityDefaults:
         main = AgentConfig(
             provider="claude",
             model="opus",
-            allowed_user_ids=[1],
             botwerk_home="/main",
-            telegram_token="main-tok",
         )
         sub = SubAgentConfig(
             name="sub",
-            telegram_token="sub-tok",
             agent_secret="sub-secret",
             trust_level="privileged",
             can_contact=["other"],

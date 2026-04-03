@@ -50,8 +50,6 @@ def main() -> None:
     print(f"Registered sub-agents ({len(agents)}):\n")
     for agent in agents:
         name = agent.get("name", "?")
-        token = agent.get("telegram_token", "?")
-        users = agent.get("allowed_user_ids", [])
         provider = agent.get("provider", "(inherited)")
         model = agent.get("model", "(inherited)")
 
@@ -60,8 +58,6 @@ def main() -> None:
         workspace_status = "exists" if home.is_dir() else "not created"
 
         print(f"  {name}")
-        print(f"    Token:     {token[:8]}...")
-        print(f"    Users:     {users}")
         print(f"    Provider:  {provider}")
         print(f"    Model:     {model}")
         print(f"    Workspace: {workspace_status}")

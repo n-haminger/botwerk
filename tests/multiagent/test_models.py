@@ -12,32 +12,25 @@ class TestSubAgentConfig:
     """Test SubAgentConfig model validation and defaults."""
 
     def test_minimal_config(self) -> None:
-        cfg = SubAgentConfig(name="sub1", telegram_token="tok:123")
+        cfg = SubAgentConfig(name="sub1")
         assert cfg.name == "sub1"
-        assert cfg.telegram_token == "tok:123"
-        assert cfg.allowed_user_ids is None
-        assert cfg.allowed_group_ids is None
         assert cfg.provider is None
         assert cfg.model is None
 
     def test_with_overrides(self) -> None:
         cfg = SubAgentConfig(
             name="sub1",
-            telegram_token="tok:123",
-            allowed_user_ids=[100, 200],
             provider="codex",
             model="gpt-4",
         )
-        assert cfg.allowed_user_ids == [100, 200]
         assert cfg.provider == "codex"
         assert cfg.model == "gpt-4"
 
     def test_model_dump_excludes_none(self) -> None:
-        cfg = SubAgentConfig(name="sub1", telegram_token="tok:123")
+        cfg = SubAgentConfig(name="sub1")
         dumped = cfg.model_dump(exclude_none=True)
         assert "provider" not in dumped
         assert "model" not in dumped
-        assert "allowed_user_ids" not in dumped
 
 
 class TestMergeSubAgentConfig:
@@ -47,16 +40,14 @@ class TestMergeSubAgentConfig:
         return AgentConfig(
             provider="claude",
             model="opus",
-            allowed_user_ids=[1, 2, 3],
             botwerk_home="/main/home",
             cli_timeout=600,
-            telegram_token="main-token",
         )
 
     def test_inherits_from_main(self) -> None:
         """Sub-agent inherits main config values when not overridden."""
         main = self._main_config()
-        sub = SubAgentConfig(name="sub1", telegram_token="sub-token")
+        sub = SubAgentConfig(name="sub1")
         result = merge_sub_agent_config(main, sub, Path("/agents/sub1"))
 
         assert result.provider == "claude"
@@ -68,7 +59,6 @@ class TestMergeSubAgentConfig:
         main = self._main_config()
         sub = SubAgentConfig(
             name="sub1",
-            telegram_token="sub-token",
             provider="codex",
             model="gpt-4",
             cli_timeout=300,
@@ -82,83 +72,16 @@ class TestMergeSubAgentConfig:
     def test_botwerk_home_always_set_to_agent_home(self) -> None:
         """botwerk_home is always the agent's home dir, not main's."""
         main = self._main_config()
-        sub = SubAgentConfig(name="sub1", telegram_token="sub-token")
+        sub = SubAgentConfig(name="sub1")
         result = merge_sub_agent_config(main, sub, Path("/agents/sub1"))
 
         assert result.botwerk_home == "/agents/sub1"
-
-    def test_telegram_token_always_from_sub(self) -> None:
-        """Telegram token always comes from sub-agent definition."""
-        main = self._main_config()
-        sub = SubAgentConfig(name="sub1", telegram_token="sub-token")
-        result = merge_sub_agent_config(main, sub, Path("/agents/sub1"))
-
-        assert result.telegram_token == "sub-token"
-
-    def test_allowed_user_ids_from_sub(self) -> None:
-        """Sub-agent's allowed_user_ids override main config."""
-        main = self._main_config()
-        sub = SubAgentConfig(
-            name="sub1",
-            telegram_token="sub-token",
-            allowed_user_ids=[100, 200],
-        )
-        result = merge_sub_agent_config(main, sub, Path("/agents/sub1"))
-
-        assert result.allowed_user_ids == [100, 200]
-
-    def test_allowed_user_ids_none_uses_empty_list(self) -> None:
-        """When sub-agent has no allowed_user_ids (None), result is empty list."""
-        main = self._main_config()
-        sub = SubAgentConfig(name="sub1", telegram_token="sub-token")
-        result = merge_sub_agent_config(main, sub, Path("/agents/sub1"))
-
-        # allowed_user_ids=None in sub -> fallback to empty list
-        assert result.allowed_user_ids == []
-
-    def test_allowed_user_ids_none_does_not_inherit_main(self) -> None:
-        """Sub-agent with allowed_user_ids=None should NOT inherit main's users.
-
-        This is intentional: sub-agents need explicit user lists for security.
-        """
-        main = self._main_config()
-        assert main.allowed_user_ids == [1, 2, 3]
-
-        sub = SubAgentConfig(name="sub1", telegram_token="sub-token")
-        result = merge_sub_agent_config(main, sub, Path("/agents/sub1"))
-
-        # Should be empty, NOT [1, 2, 3] from main
-        assert result.allowed_user_ids == []
-
-    def test_allowed_group_ids_from_sub(self) -> None:
-        """Sub-agent's allowed_group_ids override main config."""
-        main = self._main_config()
-        main.allowed_group_ids = [-1001, -1002]
-        sub = SubAgentConfig(
-            name="sub1",
-            telegram_token="sub-token",
-            allowed_group_ids=[-2001],
-        )
-        result = merge_sub_agent_config(main, sub, Path("/agents/sub1"))
-
-        assert result.allowed_group_ids == [-2001]
-
-    def test_allowed_group_ids_none_uses_empty_list(self) -> None:
-        """When sub-agent has no allowed_group_ids (None), result is empty list."""
-        main = self._main_config()
-        main.allowed_group_ids = [-1001]
-        sub = SubAgentConfig(name="sub1", telegram_token="sub-token")
-        result = merge_sub_agent_config(main, sub, Path("/agents/sub1"))
-
-        # Should be empty, NOT [-1001] from main (same pattern as allowed_user_ids)
-        assert result.allowed_group_ids == []
 
     def test_partial_overrides(self) -> None:
         """Only specified fields override, rest inherit from main."""
         main = self._main_config()
         sub = SubAgentConfig(
             name="sub1",
-            telegram_token="sub-token",
             model="sonnet",
         )
         result = merge_sub_agent_config(main, sub, Path("/agents/sub1"))
@@ -170,7 +93,7 @@ class TestMergeSubAgentConfig:
         """Sub-agent without explicit api config gets api.enabled=False."""
         main = self._main_config()
         main.api = ApiConfig(enabled=True, port=8741)
-        sub = SubAgentConfig(name="sub1", telegram_token="sub-token")
+        sub = SubAgentConfig(name="sub1")
         result = merge_sub_agent_config(main, sub, Path("/agents/sub1"))
 
         assert result.api.enabled is False
@@ -182,7 +105,6 @@ class TestMergeSubAgentConfig:
         main.api = ApiConfig(enabled=True, port=8741)
         sub = SubAgentConfig(
             name="sub1",
-            telegram_token="sub-token",
             api=ApiConfig(enabled=True, port=8742),
         )
         result = merge_sub_agent_config(main, sub, Path("/agents/sub1"))
@@ -195,7 +117,6 @@ class TestMergeSubAgentConfig:
         main = self._main_config()
         sub = SubAgentConfig(
             name="codex",
-            telegram_token="sub-token",
             linux_user=True,
         )
         result = merge_sub_agent_config(main, sub, Path("/agents/codex"))
@@ -204,7 +125,7 @@ class TestMergeSubAgentConfig:
     def test_linux_user_not_set_by_default(self) -> None:
         """linux_user is empty by default."""
         main = self._main_config()
-        sub = SubAgentConfig(name="sub1", telegram_token="sub-token")
+        sub = SubAgentConfig(name="sub1")
         result = merge_sub_agent_config(main, sub, Path("/agents/sub1"))
         assert result.linux_user == ""
 
@@ -213,7 +134,6 @@ class TestMergeSubAgentConfig:
         main = self._main_config()
         sub = SubAgentConfig(
             name="sub1",
-            telegram_token="sub-token",
             linux_user=False,
         )
         result = merge_sub_agent_config(main, sub, Path("/agents/sub1"))

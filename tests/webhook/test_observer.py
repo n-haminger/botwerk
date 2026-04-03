@@ -62,14 +62,18 @@ def _make_observer(
     mgr: WebhookManager,
     *,
     codex_cache: CodexModelCache | None = None,
+    chat_ids: list[int] | None = None,
     **config_overrides: Any,
 ) -> WebhookObserver:
-    return WebhookObserver(
+    obs = WebhookObserver(
         paths,
         mgr,
         config=_make_config(**config_overrides),
         codex_cache=codex_cache or _make_codex_cache(),
     )
+    if chat_ids:
+        obs.set_chat_ids(chat_ids)
+    return obs
 
 
 # ---------------------------------------------------------------------------
@@ -125,7 +129,7 @@ class TestDispatchRouting:
         paths = _make_paths(tmp_path)
         mgr = _make_manager(paths)
         mgr.add_hook(_make_hook("wake-hook", mode="wake"))
-        observer = _make_observer(paths, mgr, allowed_user_ids=[100])
+        observer = _make_observer(paths, mgr, chat_ids=[100])
 
         wake_handler = AsyncMock(return_value="Wake response text")
         observer.set_wake_handler(wake_handler)
@@ -140,7 +144,7 @@ class TestDispatchRouting:
         paths = _make_paths(tmp_path)
         mgr = _make_manager(paths)
         mgr.add_hook(_make_hook("wake-hook", mode="wake"))
-        observer = _make_observer(paths, mgr, allowed_user_ids=[100])
+        observer = _make_observer(paths, mgr, chat_ids=[100])
 
         result = await observer._dispatch("wake-hook", {"msg": "hi"})
         assert result.status == "error:no_wake_handler"
@@ -158,7 +162,7 @@ class TestDispatchRouting:
         paths = _make_paths(tmp_path)
         mgr = _make_manager(paths)
         mgr.add_hook(_make_hook("wake-hook", mode="wake"))
-        observer = _make_observer(paths, mgr, allowed_user_ids=[100])
+        observer = _make_observer(paths, mgr, chat_ids=[100])
         observer.set_wake_handler(AsyncMock(return_value="ok"))
 
         await observer._dispatch("wake-hook", {"msg": "hi"})
@@ -172,7 +176,7 @@ class TestDispatchRouting:
         paths = _make_paths(tmp_path)
         mgr = _make_manager(paths)
         mgr.add_hook(_make_hook("wake-hook", mode="wake"))
-        observer = _make_observer(paths, mgr, allowed_user_ids=[100])
+        observer = _make_observer(paths, mgr, chat_ids=[100])
         observer.set_wake_handler(AsyncMock(return_value=None))
 
         await observer._dispatch("wake-hook", {"msg": "hi"})
@@ -186,7 +190,7 @@ class TestDispatchRouting:
         paths = _make_paths(tmp_path)
         mgr = _make_manager(paths)
         mgr.add_hook(_make_hook("wake-hook", mode="wake"))
-        observer = _make_observer(paths, mgr, allowed_user_ids=[100])
+        observer = _make_observer(paths, mgr, chat_ids=[100])
         observer.set_wake_handler(AsyncMock(return_value="result text"))
 
         result_handler = AsyncMock()
@@ -202,7 +206,7 @@ class TestDispatchRouting:
         paths = _make_paths(tmp_path)
         mgr = _make_manager(paths)
         mgr.add_hook(_make_hook("wake-hook", mode="wake"))
-        observer = _make_observer(paths, mgr, allowed_user_ids=[100])
+        observer = _make_observer(paths, mgr, chat_ids=[100])
         observer.set_wake_handler(AsyncMock(side_effect=RuntimeError("boom")))
 
         # Per-user exceptions are caught inside _dispatch_wake, resulting in no_response
@@ -217,7 +221,7 @@ class TestDispatchRouting:
         paths = _make_paths(tmp_path)
         mgr = _make_manager(paths)
         mgr.add_hook(_make_hook("wake-hook", mode="wake"))
-        observer = _make_observer(paths, mgr, allowed_user_ids=[100])
+        observer = _make_observer(paths, mgr, chat_ids=[100])
         observer.set_wake_handler(AsyncMock(side_effect=asyncio.CancelledError()))
 
         with pytest.raises(asyncio.CancelledError):
@@ -227,7 +231,7 @@ class TestDispatchRouting:
         paths = _make_paths(tmp_path)
         mgr = _make_manager(paths)
         mgr.add_hook(_make_hook("wake-hook", mode="wake"))
-        observer = _make_observer(paths, mgr, allowed_user_ids=[100])
+        observer = _make_observer(paths, mgr, chat_ids=[100])
         observer.set_wake_handler(AsyncMock(return_value="ok"))
         observer.set_result_handler(AsyncMock(side_effect=asyncio.CancelledError()))
 
@@ -245,7 +249,7 @@ class TestDispatchWake:
         paths = _make_paths(tmp_path)
         mgr = _make_manager(paths)
         mgr.add_hook(_make_hook("wake-hook", mode="wake"))
-        observer = _make_observer(paths, mgr, allowed_user_ids=[100, 200])
+        observer = _make_observer(paths, mgr, chat_ids=[100, 200])
 
         handler = AsyncMock(return_value="response")
         observer.set_wake_handler(handler)
@@ -258,7 +262,7 @@ class TestDispatchWake:
         paths = _make_paths(tmp_path)
         mgr = _make_manager(paths)
         mgr.add_hook(_make_hook("wake-hook", mode="wake"))
-        observer = _make_observer(paths, mgr, allowed_user_ids=[100])
+        observer = _make_observer(paths, mgr, chat_ids=[100])
 
         observer.set_wake_handler(AsyncMock(return_value=None))
         result = await observer._dispatch("wake-hook", {"msg": "hi"})
@@ -268,7 +272,7 @@ class TestDispatchWake:
         paths = _make_paths(tmp_path)
         mgr = _make_manager(paths)
         mgr.add_hook(_make_hook("wake-hook", mode="wake", prompt_template="Hello {{name}}"))
-        observer = _make_observer(paths, mgr, allowed_user_ids=[100])
+        observer = _make_observer(paths, mgr, chat_ids=[100])
 
         handler = AsyncMock(return_value="ok")
         observer.set_wake_handler(handler)

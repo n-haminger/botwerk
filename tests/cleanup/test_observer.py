@@ -115,10 +115,10 @@ async def test_start_and_stop(tmp_path: Path) -> None:
 
 async def test_execute_deletes_files(tmp_path: Path) -> None:
     paths = _make_paths(tmp_path)
-    paths.telegram_files_dir.mkdir(parents=True, exist_ok=True)
+    paths.media_files_dir.mkdir(parents=True, exist_ok=True)
     paths.output_to_user_dir.mkdir(parents=True, exist_ok=True)
 
-    old_tg = paths.telegram_files_dir / "old_photo.jpg"
+    old_tg = paths.media_files_dir / "old_photo.jpg"
     old_tg.write_text("photo")
     old_out = paths.output_to_user_dir / "old_report.pdf"
     old_out.write_text("report")
@@ -129,7 +129,7 @@ async def test_execute_deletes_files(tmp_path: Path) -> None:
     os.utime(old_tg, (old_mtime, old_mtime))
     os.utime(old_out, (old_mtime, old_mtime))
 
-    recent_tg = paths.telegram_files_dir / "new.jpg"
+    recent_tg = paths.media_files_dir / "new.jpg"
     recent_tg.write_text("new")
 
     config = _make_config()
@@ -159,7 +159,7 @@ async def test_maybe_run_skips_wrong_hour(tmp_path: Path) -> None:
 async def test_maybe_run_skips_duplicate_same_day(tmp_path: Path) -> None:
     config = _make_config(check_hour=3)
     paths = _make_paths(tmp_path)
-    paths.telegram_files_dir.mkdir(parents=True, exist_ok=True)
+    paths.media_files_dir.mkdir(parents=True, exist_ok=True)
     paths.output_to_user_dir.mkdir(parents=True, exist_ok=True)
     observer = CleanupObserver(config, paths)
 

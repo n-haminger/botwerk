@@ -139,7 +139,7 @@ class ObserverManager:
 
     # -- Start / stop ---------------------------------------------------------
 
-    async def start_all(self, *, docker_container: str = "") -> None:
+    async def start_all(self) -> None:
         """Start all observers and background watchers."""
         if self.cron:
             await self.cron.start()
@@ -154,9 +154,7 @@ class ObserverManager:
         self._rule_sync_task = asyncio.create_task(watch_rule_files(self._paths.workspace))
         logger.info("Rule file watcher started (CLAUDE.md <-> AGENTS.md <-> GEMINI.md)")
 
-        self._skill_sync_task = asyncio.create_task(
-            watch_skill_sync(self._paths, docker_active=bool(docker_container))
-        )
+        self._skill_sync_task = asyncio.create_task(watch_skill_sync(self._paths))
         logger.info("Skill sync watcher started")
 
     async def start_config_reloader(

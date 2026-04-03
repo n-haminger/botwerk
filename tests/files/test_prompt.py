@@ -37,8 +37,8 @@ class TestBuildMediaPrompt:
             caption=None,
             original_type="photo",
         )
-        prompt = build_media_prompt(info, tmp_path, transport="Telegram")
-        assert "via Telegram" in prompt
+        prompt = build_media_prompt(info, tmp_path, transport="WebUI")
+        assert "via WebUI" in prompt
 
     def test_transport_label_api(self, tmp_path: Path) -> None:
         info = MediaInfo(

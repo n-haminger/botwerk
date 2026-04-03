@@ -46,11 +46,11 @@ class AsyncSendOptions:
     """Optional metadata for :meth:`InterAgentBus.send_async`.
 
     Bundles keyword-only parameters that control session handling and
-    Telegram routing so the public API stays within the argument limit.
+    routing so the public API stays within the argument limit.
 
     *new_session*: end any existing inter-agent session before processing.
-    *summary*: notification preview shown in the recipient's Telegram chat.
-    *chat_id* / *topic_id*: originating Telegram group/topic context so
+    *summary*: notification preview shown in the recipient's chat.
+    *chat_id* / *topic_id*: originating group/topic context so
     that results are delivered back to the correct thread.
     """
 
@@ -240,7 +240,7 @@ class InterAgentBus:
         sender agent's registered callback when the target agent finishes.
         Returns None if the recipient is not found.
 
-        Optional *opts* controls session handling and Telegram routing.
+        Optional *opts* controls session handling and routing.
         See :class:`AsyncSendOptions` for details.
         """
         if recipient not in self._agents:
@@ -310,7 +310,7 @@ class InterAgentBus:
                 )
                 return
 
-            # Notify the recipient agent's Telegram chat about the incoming task
+            # Notify the recipient agent's chat about the incoming task
             await self._notify_recipient(task)
 
             result_text, session_name, provider_notice = await asyncio.wait_for(
@@ -416,7 +416,7 @@ class InterAgentBus:
                 f"_{preview}_"
             )
 
-            chat_id = target.config.allowed_user_ids[0] if target.config.allowed_user_ids else 0
+            chat_id = target.config.api.chat_id or 1
             if chat_id:
                 await ns.notify(chat_id, text)
             else:

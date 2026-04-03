@@ -25,8 +25,8 @@ class TestRegistryLoad:
 
     def test_valid_json_array(self, agents_path: Path) -> None:
         data = [
-            {"name": "sub1", "telegram_token": "tok:1"},
-            {"name": "sub2", "telegram_token": "tok:2", "provider": "codex"},
+            {"name": "sub1"},
+            {"name": "sub2", "provider": "codex"},
         ]
         agents_path.write_text(json.dumps(data))
         reg = AgentRegistry(agents_path)
@@ -52,9 +52,9 @@ class TestRegistryLoad:
 
     def test_invalid_entry_is_skipped(self, agents_path: Path) -> None:
         data = [
-            {"name": "sub1", "telegram_token": "tok:1"},
-            {"invalid": "missing name and token"},
-            {"name": "sub3", "telegram_token": "tok:3"},
+            {"name": "sub1"},
+            {"invalid": "missing name"},
+            {"name": "sub3"},
         ]
         agents_path.write_text(json.dumps(data))
         reg = AgentRegistry(agents_path)
@@ -73,15 +73,15 @@ class TestRegistrySave:
 
     def test_save_creates_file(self, agents_path: Path) -> None:
         reg = AgentRegistry(agents_path)
-        agents = [SubAgentConfig(name="sub1", telegram_token="tok:1")]
+        agents = [SubAgentConfig(name="sub1")]
         reg.save(agents)
         assert agents_path.is_file()
 
     def test_save_roundtrip(self, agents_path: Path) -> None:
         reg = AgentRegistry(agents_path)
         original = [
-            SubAgentConfig(name="sub1", telegram_token="tok:1"),
-            SubAgentConfig(name="sub2", telegram_token="tok:2", provider="codex"),
+            SubAgentConfig(name="sub1"),
+            SubAgentConfig(name="sub2", provider="codex"),
         ]
         reg.save(original)
         loaded = reg.load()
@@ -92,12 +92,12 @@ class TestRegistrySave:
     def test_save_creates_parent_dirs(self, tmp_path: Path) -> None:
         deep_path = tmp_path / "a" / "b" / "agents.json"
         reg = AgentRegistry(deep_path)
-        reg.save([SubAgentConfig(name="sub1", telegram_token="tok:1")])
+        reg.save([SubAgentConfig(name="sub1")])
         assert deep_path.is_file()
 
     def test_save_excludes_none_values(self, agents_path: Path) -> None:
         reg = AgentRegistry(agents_path)
-        reg.save([SubAgentConfig(name="sub1", telegram_token="tok:1")])
+        reg.save([SubAgentConfig(name="sub1")])
         raw = json.loads(agents_path.read_text())
         assert len(raw) == 1
         assert "provider" not in raw[0]  # None fields excluded
@@ -108,23 +108,23 @@ class TestRegistryAdd:
 
     def test_add_new_agent(self, agents_path: Path) -> None:
         reg = AgentRegistry(agents_path)
-        reg.add(SubAgentConfig(name="sub1", telegram_token="tok:1"))
+        reg.add(SubAgentConfig(name="sub1"))
         agents = reg.load()
         assert len(agents) == 1
         assert agents[0].name == "sub1"
 
     def test_add_multiple_agents(self, agents_path: Path) -> None:
         reg = AgentRegistry(agents_path)
-        reg.add(SubAgentConfig(name="sub1", telegram_token="tok:1"))
-        reg.add(SubAgentConfig(name="sub2", telegram_token="tok:2"))
+        reg.add(SubAgentConfig(name="sub1"))
+        reg.add(SubAgentConfig(name="sub2"))
         agents = reg.load()
         assert len(agents) == 2
 
     def test_add_duplicate_name_raises(self, agents_path: Path) -> None:
         reg = AgentRegistry(agents_path)
-        reg.add(SubAgentConfig(name="sub1", telegram_token="tok:1"))
+        reg.add(SubAgentConfig(name="sub1"))
         with pytest.raises(ValueError, match="already exists"):
-            reg.add(SubAgentConfig(name="sub1", telegram_token="tok:2"))
+            reg.add(SubAgentConfig(name="sub1"))
 
 
 class TestRegistryRemove:
@@ -132,8 +132,8 @@ class TestRegistryRemove:
 
     def test_remove_existing(self, agents_path: Path) -> None:
         reg = AgentRegistry(agents_path)
-        reg.add(SubAgentConfig(name="sub1", telegram_token="tok:1"))
-        reg.add(SubAgentConfig(name="sub2", telegram_token="tok:2"))
+        reg.add(SubAgentConfig(name="sub1"))
+        reg.add(SubAgentConfig(name="sub2"))
 
         removed = reg.remove("sub1")
         assert removed is not None
@@ -146,6 +146,6 @@ class TestRegistryRemove:
 
     def test_remove_last_agent(self, agents_path: Path) -> None:
         reg = AgentRegistry(agents_path)
-        reg.add(SubAgentConfig(name="sub1", telegram_token="tok:1"))
+        reg.add(SubAgentConfig(name="sub1"))
         reg.remove("sub1")
         assert reg.load() == []

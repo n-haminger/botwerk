@@ -6,7 +6,7 @@ Descriptions are kept ≤22 chars so mobile clients don't truncate.
 
 from __future__ import annotations
 
-# -- Core commands (every agent, shown in Telegram popup) ------------------
+# -- Core commands (every agent) --
 # Sorted by typical usage: daily actions → power-user → rare maintenance.
 
 BOT_COMMANDS: list[tuple[str, str]] = [
@@ -32,7 +32,7 @@ BOT_COMMANDS: list[tuple[str, str]] = [
     ("restart", "Restart bot"),
 ]
 
-# Sub-commands registered as handlers but NOT shown in the Telegram popup.
+# Sub-commands registered as handlers but NOT shown in the command list.
 # Users discover them via /agent_commands or /help.
 MULTIAGENT_SUB_COMMANDS: list[tuple[str, str]] = [
     ("agents", "List all agents"),

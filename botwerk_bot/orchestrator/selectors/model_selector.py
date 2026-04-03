@@ -1,4 +1,4 @@
-"""Interactive model selector wizard for Telegram inline keyboards."""
+"""Interactive model selector wizard."""
 
 from __future__ import annotations
 

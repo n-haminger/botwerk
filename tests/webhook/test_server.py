@@ -1,4 +1,4 @@
-"""Tests for webhook HTTP server (aiohttp)."""
+"""Tests for webhook HTTP server (FastAPI)."""
 
 from __future__ import annotations
 
@@ -10,8 +10,7 @@ from typing import Any
 from unittest.mock import AsyncMock
 
 import pytest
-from aiohttp import web
-from aiohttp.test_utils import TestClient, TestServer
+from httpx import ASGITransport, AsyncClient
 
 from botwerk_bot.config import WebhookConfig
 from botwerk_bot.webhook.manager import WebhookManager
@@ -20,7 +19,6 @@ from botwerk_bot.webhook.server import WebhookServer
 
 _TOKEN = "test-secret-token"
 _HOOK_TOKEN = "per-hook-secret-token"
-_DISPATCH_MOCK_KEY: web.AppKey[AsyncMock] = web.AppKey("_dispatch_mock")
 
 
 def _make_config(**overrides: Any) -> WebhookConfig:
@@ -60,7 +58,7 @@ def _hmac_sign(body: bytes, secret: str) -> str:
 
 
 @pytest.fixture
-async def server_client(tmp_path: Any) -> AsyncIterator[TestClient[Any, Any]]:
+async def server_client(tmp_path: Any) -> AsyncIterator[tuple[AsyncClient, AsyncMock]]:
     """Create a test client with a real WebhookServer."""
     config = _make_config()
     hooks_path = tmp_path / "webhooks.json"
@@ -104,17 +102,9 @@ async def server_client(tmp_path: Any) -> AsyncIterator[TestClient[Any, Any]]:
     )
     server.set_dispatch_handler(dispatch_mock)
 
-    # Build app directly for testing
-    app = web.Application(client_max_size=config.max_body_bytes)
-    app.router.add_get("/health", server._handle_health)
-    app.router.add_post("/hooks/{hook_id}", server._handle_hook)
-    app[_DISPATCH_MOCK_KEY] = dispatch_mock
-
-    test_server = TestServer(app)
-    client = TestClient(test_server)
-    await client.start_server()
-    yield client
-    await client.close()
+    transport = ASGITransport(app=server._app)
+    async with AsyncClient(transport=transport, base_url="http://test") as client:
+        yield client, dispatch_mock
 
 
 # ---------------------------------------------------------------------------
@@ -123,10 +113,11 @@ async def server_client(tmp_path: Any) -> AsyncIterator[TestClient[Any, Any]]:
 
 
 class TestHealthEndpoint:
-    async def test_health_returns_ok(self, server_client: TestClient[Any, Any]) -> None:
-        resp = await server_client.get("/health")
-        assert resp.status == 200
-        data = await resp.json()
+    async def test_health_returns_ok(self, server_client: tuple[AsyncClient, AsyncMock]) -> None:
+        client, _ = server_client
+        resp = await client.get("/health")
+        assert resp.status_code == 200
+        data = resp.json()
         assert data["status"] == "ok"
 
 
@@ -136,24 +127,26 @@ class TestHealthEndpoint:
 
 
 class TestAuthChecks:
-    async def test_no_auth_returns_401(self, server_client: TestClient[Any, Any]) -> None:
-        resp = await server_client.post(
+    async def test_no_auth_returns_401(self, server_client: tuple[AsyncClient, AsyncMock]) -> None:
+        client, _ = server_client
+        resp = await client.post(
             "/hooks/test-hook",
             headers={"Content-Type": "application/json"},
-            data=json.dumps({"msg": "hi"}),
+            content=json.dumps({"msg": "hi"}),
         )
-        assert resp.status == 401
+        assert resp.status_code == 401
 
-    async def test_wrong_token_returns_401(self, server_client: TestClient[Any, Any]) -> None:
-        resp = await server_client.post(
+    async def test_wrong_token_returns_401(self, server_client: tuple[AsyncClient, AsyncMock]) -> None:
+        client, _ = server_client
+        resp = await client.post(
             "/hooks/test-hook",
             headers={
                 "Authorization": "Bearer wrong-token",
                 "Content-Type": "application/json",
             },
-            data=json.dumps({"msg": "hi"}),
+            content=json.dumps({"msg": "hi"}),
         )
-        assert resp.status == 401
+        assert resp.status_code == 401
 
 
 # ---------------------------------------------------------------------------
@@ -162,16 +155,17 @@ class TestAuthChecks:
 
 
 class TestContentType:
-    async def test_non_json_returns_415(self, server_client: TestClient[Any, Any]) -> None:
-        resp = await server_client.post(
+    async def test_non_json_returns_415(self, server_client: tuple[AsyncClient, AsyncMock]) -> None:
+        client, _ = server_client
+        resp = await client.post(
             "/hooks/test-hook",
             headers={
                 "Authorization": f"Bearer {_TOKEN}",
                 "Content-Type": "text/plain",
             },
-            data="hello",
+            content="hello",
         )
-        assert resp.status == 415
+        assert resp.status_code == 415
 
 
 # ---------------------------------------------------------------------------
@@ -180,21 +174,23 @@ class TestContentType:
 
 
 class TestPayloadValidation:
-    async def test_invalid_json_returns_400(self, server_client: TestClient[Any, Any]) -> None:
-        resp = await server_client.post(
+    async def test_invalid_json_returns_400(self, server_client: tuple[AsyncClient, AsyncMock]) -> None:
+        client, _ = server_client
+        resp = await client.post(
             "/hooks/test-hook",
             headers=_auth_headers(),
-            data="not json{{{",
+            content="not json{{{",
         )
-        assert resp.status == 400
+        assert resp.status_code == 400
 
-    async def test_non_object_returns_400(self, server_client: TestClient[Any, Any]) -> None:
-        resp = await server_client.post(
+    async def test_non_object_returns_400(self, server_client: tuple[AsyncClient, AsyncMock]) -> None:
+        client, _ = server_client
+        resp = await client.post(
             "/hooks/test-hook",
             headers=_auth_headers(),
-            data=json.dumps([1, 2, 3]),
+            content=json.dumps([1, 2, 3]),
         )
-        assert resp.status == 400
+        assert resp.status_code == 400
 
 
 # ---------------------------------------------------------------------------
@@ -203,30 +199,33 @@ class TestPayloadValidation:
 
 
 class TestHookRouting:
-    async def test_missing_hook_returns_404(self, server_client: TestClient[Any, Any]) -> None:
-        resp = await server_client.post(
+    async def test_missing_hook_returns_404(self, server_client: tuple[AsyncClient, AsyncMock]) -> None:
+        client, _ = server_client
+        resp = await client.post(
             "/hooks/nonexistent",
             headers=_auth_headers(),
-            data=json.dumps({"msg": "hi"}),
+            content=json.dumps({"msg": "hi"}),
         )
-        assert resp.status == 404
+        assert resp.status_code == 404
 
-    async def test_disabled_hook_returns_403(self, server_client: TestClient[Any, Any]) -> None:
-        resp = await server_client.post(
+    async def test_disabled_hook_returns_403(self, server_client: tuple[AsyncClient, AsyncMock]) -> None:
+        client, _ = server_client
+        resp = await client.post(
             "/hooks/disabled-hook",
             headers=_auth_headers(),
-            data=json.dumps({"msg": "hi"}),
+            content=json.dumps({"msg": "hi"}),
         )
-        assert resp.status == 403
+        assert resp.status_code == 403
 
-    async def test_valid_request_returns_202(self, server_client: TestClient[Any, Any]) -> None:
-        resp = await server_client.post(
+    async def test_valid_request_returns_202(self, server_client: tuple[AsyncClient, AsyncMock]) -> None:
+        client, _ = server_client
+        resp = await client.post(
             "/hooks/test-hook",
             headers=_auth_headers(),
-            data=json.dumps({"msg": "hi"}),
+            content=json.dumps({"msg": "hi"}),
         )
-        assert resp.status == 202
-        data = await resp.json()
+        assert resp.status_code == 202
+        data = resp.json()
         assert data["accepted"] is True
         assert data["hook_id"] == "test-hook"
 
@@ -256,33 +255,24 @@ class TestRateLimiting:
             )
         )
 
-        app = web.Application(client_max_size=config.max_body_bytes)
-        app.router.add_get("/health", server._handle_health)
-        app.router.add_post("/hooks/{hook_id}", server._handle_hook)
-
-        test_server = TestServer(app)
-        client = TestClient(test_server)
-        await client.start_server()
-
-        try:
+        transport = ASGITransport(app=server._app)
+        async with AsyncClient(transport=transport, base_url="http://test") as client:
             # First two should pass
             for _ in range(2):
                 resp = await client.post(
                     "/hooks/test-hook",
                     headers=_auth_headers(),
-                    data=json.dumps({"msg": "hi"}),
+                    content=json.dumps({"msg": "hi"}),
                 )
-                assert resp.status == 202
+                assert resp.status_code == 202
 
             # Third should be rate limited
             resp = await client.post(
                 "/hooks/test-hook",
                 headers=_auth_headers(),
-                data=json.dumps({"msg": "hi"}),
+                content=json.dumps({"msg": "hi"}),
             )
-            assert resp.status == 429
-        finally:
-            await client.close()
+            assert resp.status_code == 429
 
 
 # ---------------------------------------------------------------------------
@@ -291,20 +281,20 @@ class TestRateLimiting:
 
 
 class TestDispatch:
-    async def test_dispatch_handler_called(self, server_client: TestClient[Any, Any]) -> None:
-        resp = await server_client.post(
+    async def test_dispatch_handler_called(self, server_client: tuple[AsyncClient, AsyncMock]) -> None:
+        client, dispatch_mock = server_client
+        resp = await client.post(
             "/hooks/test-hook",
             headers=_auth_headers(),
-            data=json.dumps({"msg": "hello"}),
+            content=json.dumps({"msg": "hello"}),
         )
-        assert resp.status == 202
+        assert resp.status_code == 202
 
         # Give fire-and-forget task a moment to run
         import asyncio
 
         await asyncio.sleep(0.1)
 
-        dispatch_mock = server_client.app[_DISPATCH_MOCK_KEY]
         dispatch_mock.assert_awaited_once_with("test-hook", {"msg": "hello"})
 
     async def test_no_dispatch_handler_still_202(self, tmp_path: Any) -> None:
@@ -316,23 +306,14 @@ class TestDispatch:
         server = WebhookServer(config, manager)
         # No dispatch handler set
 
-        app = web.Application(client_max_size=config.max_body_bytes)
-        app.router.add_get("/health", server._handle_health)
-        app.router.add_post("/hooks/{hook_id}", server._handle_hook)
-
-        test_server = TestServer(app)
-        client = TestClient(test_server)
-        await client.start_server()
-
-        try:
+        transport = ASGITransport(app=server._app)
+        async with AsyncClient(transport=transport, base_url="http://test") as client:
             resp = await client.post(
                 "/hooks/test-hook",
                 headers=_auth_headers(),
-                data=json.dumps({"msg": "hi"}),
+                content=json.dumps({"msg": "hi"}),
             )
-            assert resp.status == 202
-        finally:
-            await client.close()
+            assert resp.status_code == 202
 
 
 # ---------------------------------------------------------------------------
@@ -341,41 +322,45 @@ class TestDispatch:
 
 
 class TestPerHookTokenAuth:
-    async def test_per_hook_token_accepted(self, server_client: TestClient[Any, Any]) -> None:
-        resp = await server_client.post(
+    async def test_per_hook_token_accepted(self, server_client: tuple[AsyncClient, AsyncMock]) -> None:
+        client, _ = server_client
+        resp = await client.post(
             "/hooks/hook-with-token",
             headers=_auth_headers(_HOOK_TOKEN),
-            data=json.dumps({"msg": "hi"}),
+            content=json.dumps({"msg": "hi"}),
         )
-        assert resp.status == 202
+        assert resp.status_code == 202
 
-    async def test_per_hook_token_rejects_global(self, server_client: TestClient[Any, Any]) -> None:
-        resp = await server_client.post(
+    async def test_per_hook_token_rejects_global(self, server_client: tuple[AsyncClient, AsyncMock]) -> None:
+        client, _ = server_client
+        resp = await client.post(
             "/hooks/hook-with-token",
             headers=_auth_headers(_TOKEN),
-            data=json.dumps({"msg": "hi"}),
+            content=json.dumps({"msg": "hi"}),
         )
-        assert resp.status == 401
+        assert resp.status_code == 401
 
     async def test_legacy_hook_accepts_global_token(
-        self, server_client: TestClient[Any, Any]
+        self, server_client: tuple[AsyncClient, AsyncMock]
     ) -> None:
-        resp = await server_client.post(
+        client, _ = server_client
+        resp = await client.post(
             "/hooks/test-hook",
             headers=_auth_headers(_TOKEN),
-            data=json.dumps({"msg": "hi"}),
+            content=json.dumps({"msg": "hi"}),
         )
-        assert resp.status == 202
+        assert resp.status_code == 202
 
     async def test_nonexistent_hook_returns_404_before_auth(
-        self, server_client: TestClient[Any, Any]
+        self, server_client: tuple[AsyncClient, AsyncMock]
     ) -> None:
-        resp = await server_client.post(
+        client, _ = server_client
+        resp = await client.post(
             "/hooks/nonexistent",
             headers={"Content-Type": "application/json"},
-            data=json.dumps({"msg": "hi"}),
+            content=json.dumps({"msg": "hi"}),
         )
-        assert resp.status == 404
+        assert resp.status_code == 404
 
 
 # ---------------------------------------------------------------------------
@@ -384,40 +369,43 @@ class TestPerHookTokenAuth:
 
 
 class TestHmacAuth:
-    async def test_hmac_valid_signature_accepted(self, server_client: TestClient[Any, Any]) -> None:
+    async def test_hmac_valid_signature_accepted(self, server_client: tuple[AsyncClient, AsyncMock]) -> None:
+        client, _ = server_client
         body = json.dumps({"msg": "event"}).encode()
         sig = _hmac_sign(body, "hmac-test-secret")
-        resp = await server_client.post(
+        resp = await client.post(
             "/hooks/hmac-hook",
             headers={
                 "Content-Type": "application/json",
                 "X-Hub-Signature-256": sig,
             },
-            data=body,
+            content=body,
         )
-        assert resp.status == 202
+        assert resp.status_code == 202
 
     async def test_hmac_invalid_signature_rejected(
-        self, server_client: TestClient[Any, Any]
+        self, server_client: tuple[AsyncClient, AsyncMock]
     ) -> None:
+        client, _ = server_client
         body = json.dumps({"msg": "event"}).encode()
-        resp = await server_client.post(
+        resp = await client.post(
             "/hooks/hmac-hook",
             headers={
                 "Content-Type": "application/json",
                 "X-Hub-Signature-256": "sha256=wrong",
             },
-            data=body,
+            content=body,
         )
-        assert resp.status == 401
+        assert resp.status_code == 401
 
-    async def test_hmac_hook_ignores_bearer(self, server_client: TestClient[Any, Any]) -> None:
-        resp = await server_client.post(
+    async def test_hmac_hook_ignores_bearer(self, server_client: tuple[AsyncClient, AsyncMock]) -> None:
+        client, _ = server_client
+        resp = await client.post(
             "/hooks/hmac-hook",
             headers=_auth_headers(_TOKEN),
-            data=json.dumps({"msg": "hi"}),
+            content=json.dumps({"msg": "hi"}),
         )
-        assert resp.status == 401
+        assert resp.status_code == 401
 
 
 # ---------------------------------------------------------------------------
@@ -427,48 +415,51 @@ class TestHmacAuth:
 
 class TestStripeStyleHmac:
     async def test_stripe_valid_signature_accepted(
-        self, server_client: TestClient[Any, Any]
+        self, server_client: tuple[AsyncClient, AsyncMock]
     ) -> None:
+        client, _ = server_client
         body = json.dumps({"type": "charge.succeeded"}).encode()
         secret = "whsec_stripe_test"
         timestamp = "1614000000"
         signed_payload = f"{timestamp}.".encode() + body
         sig = hmac_mod.new(secret.encode(), signed_payload, hashlib.sha256).hexdigest()
         header = f"t={timestamp},v1={sig}"
-        resp = await server_client.post(
+        resp = await client.post(
             "/hooks/stripe-hook",
             headers={
                 "Content-Type": "application/json",
                 "Stripe-Signature": header,
             },
-            data=body,
+            content=body,
         )
-        assert resp.status == 202
+        assert resp.status_code == 202
 
     async def test_stripe_wrong_signature_rejected(
-        self, server_client: TestClient[Any, Any]
+        self, server_client: tuple[AsyncClient, AsyncMock]
     ) -> None:
+        client, _ = server_client
         body = json.dumps({"type": "charge.failed"}).encode()
         header = "t=1614000000,v1=deadbeef0000"
-        resp = await server_client.post(
+        resp = await client.post(
             "/hooks/stripe-hook",
             headers={
                 "Content-Type": "application/json",
                 "Stripe-Signature": header,
             },
-            data=body,
+            content=body,
         )
-        assert resp.status == 401
+        assert resp.status_code == 401
 
     async def test_stripe_malformed_header_rejected(
-        self, server_client: TestClient[Any, Any]
+        self, server_client: tuple[AsyncClient, AsyncMock]
     ) -> None:
-        resp = await server_client.post(
+        client, _ = server_client
+        resp = await client.post(
             "/hooks/stripe-hook",
             headers={
                 "Content-Type": "application/json",
                 "Stripe-Signature": "garbage",
             },
-            data=json.dumps({"type": "test"}).encode(),
+            content=json.dumps({"type": "test"}).encode(),
         )
-        assert resp.status == 401
+        assert resp.status_code == 401

@@ -62,7 +62,7 @@ class CodexCLI(BaseCLI):
     def __init__(self, config: CLIConfig) -> None:
         self._config = config
         self._working_dir = Path(config.working_dir).resolve()
-        self._cli = "codex" if config.docker_container else self._find_cli()
+        self._cli = self._find_cli()
         logger.info("Codex CLI wrapper: cwd=%s, model=%s", self._working_dir, config.model)
 
     @staticmethod

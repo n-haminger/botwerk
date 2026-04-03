@@ -21,7 +21,6 @@ from botwerk_bot.workspace.paths import BotwerkPaths
 def orch_ia(workspace: tuple[BotwerkPaths, AgentConfig]) -> Orchestrator:
     """Orchestrator with mocked CLIService for inter-agent tests."""
     paths, config = workspace
-    config.allowed_user_ids = [12345]
     o = Orchestrator(config, paths, agent_name="codex")
     mock_cli = MagicMock()
     mock_cli._config = MagicMock()
@@ -35,14 +34,8 @@ def orch_ia(workspace: tuple[BotwerkPaths, AgentConfig]) -> Orchestrator:
 class TestInteragentChatId:
     """Test _interagent_chat_id helper."""
 
-    def test_returns_first_allowed_user(self, orch_ia: Orchestrator) -> None:
-        assert _interagent_chat_id(orch_ia) == 12345
-
-    def test_returns_zero_when_no_users(self, workspace: tuple[BotwerkPaths, AgentConfig]) -> None:
-        paths, config = workspace
-        config.allowed_user_ids = []
-        o = Orchestrator(config, paths)
-        assert _interagent_chat_id(o) == 0
+    def test_returns_zero_default(self, orch_ia: Orchestrator) -> None:
+        assert _interagent_chat_id(orch_ia) == 0
 
 
 class TestGetOrCreateInteragentSession:
@@ -53,7 +46,7 @@ class TestGetOrCreateInteragentSession:
         assert is_new is True
         assert notice == ""
         assert ns.name == "ia-main"
-        assert ns.chat_id == 12345
+        assert ns.chat_id == 0
         assert ns.status == "running"
 
     def test_reuses_existing_session(self, orch_ia: Orchestrator) -> None:
@@ -128,7 +121,7 @@ class TestHandleInteragentMessage:
 
     async def test_creates_named_session(self, orch_ia: Orchestrator) -> None:
         await orch_ia.handle_interagent_message("main", "Task 1")
-        ns = orch_ia._named_sessions.get(12345, "ia-main")
+        ns = orch_ia._named_sessions.get(0, "ia-main")
         assert ns is not None
         assert ns.session_id == "sess-001"
         assert ns.status == "idle"
@@ -204,7 +197,7 @@ class TestHandleInteragentMessage:
     async def test_session_idle_after_error(self, orch_ia: Orchestrator) -> None:
         orch_ia._cli_service.execute = AsyncMock(side_effect=RuntimeError("crash"))
         await orch_ia.handle_interagent_message("main", "Crash")
-        ns = orch_ia._named_sessions.get(12345, "ia-main")
+        ns = orch_ia._named_sessions.get(0, "ia-main")
         assert ns is not None
         assert ns.status == "idle"
 

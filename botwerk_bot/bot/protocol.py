@@ -17,7 +17,7 @@ if TYPE_CHECKING:
 
 @runtime_checkable
 class BotProtocol(Protocol):
-    """Interface that both TelegramBot and MatrixBot implement.
+    """Interface that transport implementations must satisfy.
 
     The supervisor, AgentStack, and InterAgentBus depend ONLY on this protocol,
     never on transport-specific classes.

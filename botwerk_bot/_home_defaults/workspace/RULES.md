@@ -61,7 +61,7 @@ PPLX_API_KEY=sk-xxx
 DEEPSEEK_API_KEY=sk-yyy
 ```
 
-These secrets are automatically available in all CLI executions (host and Docker).
+These secrets are automatically available in all CLI executions.
 Existing environment variables are never overridden.
 Changes take effect on the next CLI invocation (no restart needed).
 

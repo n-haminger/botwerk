@@ -21,7 +21,7 @@ def service_config_with_params() -> CLIServiceConfig:
         max_budget_usd=None,
         permission_mode="normal",
         reasoning_effort="medium",
-        docker_container=None,
+
         claude_cli_parameters=["--claude-flag", "claude-value"],
         codex_cli_parameters=["--codex-flag", "codex-value"],
     )
@@ -41,7 +41,7 @@ def test_main_agent_claude_parameters() -> None:
         max_budget_usd=None,
         permission_mode="normal",
         reasoning_effort="",
-        docker_container="",
+
         process_registry=MagicMock(),
         chat_id=123,
         process_label="test",
@@ -76,7 +76,7 @@ def test_main_agent_codex_parameters() -> None:
         max_budget_usd=None,
         permission_mode="normal",
         reasoning_effort="medium",
-        docker_container="",
+
         process_registry=MagicMock(),
         chat_id=123,
         process_label="test",
@@ -114,7 +114,7 @@ def test_parameter_isolation() -> None:
         max_budget_usd=None,
         permission_mode="normal",
         reasoning_effort="",
-        docker_container="",
+
         process_registry=MagicMock(),
         chat_id=123,
         process_label="test",
@@ -139,7 +139,7 @@ def test_parameter_isolation() -> None:
         max_budget_usd=None,
         permission_mode="normal",
         reasoning_effort="medium",
-        docker_container="",
+
         process_registry=MagicMock(),
         chat_id=123,
         process_label="test",
@@ -165,7 +165,7 @@ async def test_cli_service_parameter_routing() -> None:
         max_budget_usd=None,
         permission_mode="normal",
         reasoning_effort="medium",
-        docker_container=None,
+
         claude_cli_parameters=["--claude-param", "value1"],
         codex_cli_parameters=["--codex-param", "value2"],
     )

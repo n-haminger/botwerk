@@ -1,4 +1,4 @@
-"""Telegram command handlers for multi-agent management.
+"""Command handlers for multi-agent management.
 
 Registered only on the main agent's Orchestrator when a supervisor is present.
 """

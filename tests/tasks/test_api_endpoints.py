@@ -2,15 +2,12 @@
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING
 from unittest.mock import AsyncMock, MagicMock
 
 import pytest
+from httpx import ASGITransport, AsyncClient
 
 from botwerk_bot.multiagent.internal_api import InternalAgentAPI
-
-if TYPE_CHECKING:
-    from aiohttp.test_utils import TestClient
 
 
 def _make_task_hub(
@@ -32,76 +29,87 @@ def _make_task_hub(
 
 
 @pytest.fixture
-async def api_client(aiohttp_client: object) -> TestClient:
+async def api_client() -> AsyncClient:
     """Create test client with task-only API (no bus)."""
     api = InternalAgentAPI(bus=None, port=0)
     hub = _make_task_hub()
     api.set_task_hub(hub)
-    api._app["_test_hub"] = hub  # Stash for test access
-    return await aiohttp_client(api._app)  # type: ignore[return-value]
+    api._app.state._test_hub = hub  # Stash for test access
+    transport = ASGITransport(app=api._app)
+    async with AsyncClient(transport=transport, base_url="http://test") as client:
+        yield client
+
+
+def _get_hub(client: AsyncClient) -> MagicMock:
+    """Retrieve stashed task hub from the app state."""
+    return client._transport.app.state._test_hub  # type: ignore[union-attr]
 
 
 class TestTaskCreate:
-    async def test_creates_task(self, api_client: TestClient) -> None:
+    async def test_creates_task(self, api_client: AsyncClient) -> None:
         resp = await api_client.post(
             "/tasks/create",
             json={"from": "main", "prompt": "build website", "name": "Website"},
         )
-        assert resp.status == 200
-        data = await resp.json()
+        assert resp.status_code == 200
+        data = resp.json()
         assert data["success"] is True
         assert data["task_id"] == "abc123"
 
-    async def test_missing_prompt(self, api_client: TestClient) -> None:
+    async def test_missing_prompt(self, api_client: AsyncClient) -> None:
         resp = await api_client.post("/tasks/create", json={"from": "main"})
-        assert resp.status == 400
-        data = await resp.json()
+        assert resp.status_code == 400
+        data = resp.json()
         assert data["success"] is False
 
-    async def test_invalid_json(self, api_client: TestClient) -> None:
-        resp = await api_client.post("/tasks/create", data=b"not json")
-        assert resp.status == 400
+    async def test_invalid_json(self, api_client: AsyncClient) -> None:
+        resp = await api_client.post(
+            "/tasks/create",
+            content=b"not json",
+            headers={"content-type": "application/json"},
+        )
+        assert resp.status_code == 400
 
 
 class TestTaskAskParent:
-    async def test_returns_answer(self, api_client: TestClient) -> None:
+    async def test_returns_answer(self, api_client: AsyncClient) -> None:
         resp = await api_client.post(
             "/tasks/ask_parent",
             json={"task_id": "abc", "question": "Which framework?"},
         )
-        assert resp.status == 200
-        data = await resp.json()
+        assert resp.status_code == 200
+        data = resp.json()
         assert data["success"] is True
         assert data["answer"] == "Yes, use HTML"
 
-    async def test_missing_fields(self, api_client: TestClient) -> None:
+    async def test_missing_fields(self, api_client: AsyncClient) -> None:
         resp = await api_client.post("/tasks/ask_parent", json={"task_id": "abc"})
-        assert resp.status == 400
+        assert resp.status_code == 400
 
 
 class TestTaskList:
-    async def test_returns_empty(self, api_client: TestClient) -> None:
+    async def test_returns_empty(self, api_client: AsyncClient) -> None:
         resp = await api_client.get("/tasks/list")
-        assert resp.status == 200
-        data = await resp.json()
+        assert resp.status_code == 200
+        data = resp.json()
         assert data["tasks"] == []
 
 
 class TestTaskCancel:
-    async def test_cancels_task(self, api_client: TestClient) -> None:
+    async def test_cancels_task(self, api_client: AsyncClient) -> None:
         resp = await api_client.post("/tasks/cancel", json={"task_id": "abc"})
-        assert resp.status == 200
-        data = await resp.json()
+        assert resp.status_code == 200
+        data = resp.json()
         assert data["success"] is True
 
-    async def test_missing_task_id(self, api_client: TestClient) -> None:
+    async def test_missing_task_id(self, api_client: AsyncClient) -> None:
         resp = await api_client.post("/tasks/cancel", json={})
-        assert resp.status == 400
+        assert resp.status_code == 400
 
 
 class TestTaskDelete:
-    async def test_deletes_finished_task(self, api_client: TestClient) -> None:
-        hub = api_client.app["_test_hub"]
+    async def test_deletes_finished_task(self, api_client: AsyncClient) -> None:
+        hub = _get_hub(api_client)
         entry = MagicMock()
         entry.parent_agent = "main"
         entry.status = "done"
@@ -112,12 +120,12 @@ class TestTaskDelete:
             "/tasks/delete",
             json={"task_id": "abc", "from": "main"},
         )
-        assert resp.status == 200
-        data = await resp.json()
+        assert resp.status_code == 200
+        data = resp.json()
         assert data["success"] is True
 
-    async def test_rejects_running_task(self, api_client: TestClient) -> None:
-        hub = api_client.app["_test_hub"]
+    async def test_rejects_running_task(self, api_client: AsyncClient) -> None:
+        hub = _get_hub(api_client)
         entry = MagicMock()
         entry.parent_agent = "main"
         entry.status = "running"
@@ -128,17 +136,17 @@ class TestTaskDelete:
             "/tasks/delete",
             json={"task_id": "abc", "from": "main"},
         )
-        assert resp.status == 409
+        assert resp.status_code == 409
 
-    async def test_not_found(self, api_client: TestClient) -> None:
-        hub = api_client.app["_test_hub"]
+    async def test_not_found(self, api_client: AsyncClient) -> None:
+        hub = _get_hub(api_client)
         hub.registry.get.return_value = None
 
         resp = await api_client.post("/tasks/delete", json={"task_id": "nope"})
-        assert resp.status == 404
+        assert resp.status_code == 404
 
-    async def test_unauthorized(self, api_client: TestClient) -> None:
-        hub = api_client.app["_test_hub"]
+    async def test_unauthorized(self, api_client: AsyncClient) -> None:
+        hub = _get_hub(api_client)
         entry = MagicMock()
         entry.parent_agent = "main"
         hub.registry.get.return_value = entry
@@ -147,22 +155,22 @@ class TestTaskDelete:
             "/tasks/delete",
             json={"task_id": "abc", "from": "other_agent"},
         )
-        assert resp.status == 403
+        assert resp.status_code == 403
 
-    async def test_missing_task_id(self, api_client: TestClient) -> None:
+    async def test_missing_task_id(self, api_client: AsyncClient) -> None:
         resp = await api_client.post("/tasks/delete", json={})
-        assert resp.status == 400
+        assert resp.status_code == 400
 
 
 class TestTaskOnlyMode:
-    async def test_no_interagent_routes_without_bus(self, api_client: TestClient) -> None:
+    async def test_no_interagent_routes_without_bus(self, api_client: AsyncClient) -> None:
         """When bus is None, interagent routes should not exist."""
         resp = await api_client.post(
             "/interagent/send",
             json={"from": "a", "to": "b", "message": "hi"},
         )
-        assert resp.status == 404
+        assert resp.status_code == 404 or resp.status_code == 405
 
-    async def test_task_routes_work_without_bus(self, api_client: TestClient) -> None:
+    async def test_task_routes_work_without_bus(self, api_client: AsyncClient) -> None:
         resp = await api_client.get("/tasks/list")
-        assert resp.status == 200
+        assert resp.status_code == 200

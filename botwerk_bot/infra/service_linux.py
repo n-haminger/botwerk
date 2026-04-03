@@ -81,7 +81,7 @@ def _generate_service_unit(binary_path: str) -> str:
 
     return f"""\
 [Unit]
-Description=botwerk - Telegram bot powered by AI CLIs
+Description=botwerk - AI agent orchestrator powered by AI CLIs
 After=network-online.target
 Wants=network-online.target
 

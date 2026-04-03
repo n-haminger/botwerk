@@ -32,6 +32,7 @@ class HeartbeatObserver(BaseObserver):
     def __init__(self, config: AgentConfig) -> None:
         super().__init__()
         self._config = config
+        self._chat_ids: list[int] = []
         self._on_result: HeartbeatResultCallback | None = None
         self._handle_heartbeat: Callable[[int], Awaitable[str | None]] | None = None
         self._is_chat_busy: Callable[[int], bool] | None = None
@@ -59,6 +60,10 @@ class HeartbeatObserver(BaseObserver):
     def set_stale_cleanup(self, cleanup: Callable[[], Awaitable[int]]) -> None:
         """Set the function that kills stale CLI processes (wall-clock based)."""
         self._stale_cleanup = cleanup
+
+    def set_chat_ids(self, chat_ids: list[int]) -> None:
+        """Set the chat IDs to send heartbeats to (injected by transport)."""
+        self._chat_ids = chat_ids
 
     async def start(self) -> None:
         """Start the heartbeat background loop."""
@@ -136,8 +141,9 @@ class HeartbeatObserver(BaseObserver):
             logger.debug("Heartbeat skipped: quiet hours (%d:00 %s)", now_hour, tz.key)
             return
 
-        logger.debug("Heartbeat tick: checking %d chat(s)", len(self._config.allowed_user_ids))
-        for chat_id in self._config.allowed_user_ids:
+        chat_ids = self._chat_ids or [1]
+        logger.debug("Heartbeat tick: checking %d chat(s)", len(chat_ids))
+        for chat_id in chat_ids:
             await self._run_for_chat(chat_id)
 
     async def _run_for_chat(self, chat_id: int) -> None:

@@ -7,7 +7,7 @@ HTTP ingress for external event triggers.
 - `models.py`: `WebhookEntry`, `WebhookResult`, `render_template`
 - `manager.py`: persistence CRUD for hooks
 - `auth.py`: bearer/hmac validation + rate limiter
-- `server.py`: aiohttp server and request validation chain
+- `server.py`: FastAPI server and request validation chain
 - `observer.py`: server lifecycle, dispatch logic, watcher
 - `infra/task_runner.py` (shared): folder checks + one-shot task execution for webhook/cron/background
 

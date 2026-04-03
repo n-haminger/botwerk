@@ -230,8 +230,8 @@ class TaskHub:
     async def forward_question(self, task_id: str, question: str) -> str:
         """Forward a task agent's question to the parent. Returns immediately.
 
-        The question is delivered asynchronously to the parent agent's Telegram
-        chat. The parent answers by resuming the task with ``resume_task.py``.
+        The question is delivered asynchronously to the parent agent's chat.
+        The parent answers by resuming the task with ``resume_task.py``.
         """
         entry = self._registry.get(task_id)
         if entry is None:
@@ -260,7 +260,7 @@ class TaskHub:
         if inflight:
             inflight.has_pending_question = True
 
-        # Fire-and-forget: deliver to parent's Telegram chat
+        # Fire-and-forget: deliver to parent's chat
         task = asyncio.create_task(
             self._deliver_question(handler, entry, question),
             name=f"task-question:{task_id}",

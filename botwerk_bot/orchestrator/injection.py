@@ -74,11 +74,12 @@ async def _inject_prompt(
 
 
 def _interagent_chat_id(orch: Orchestrator) -> int:
-    """Return the real Telegram chat_id for inter-agent sessions."""
-    if not orch._config.allowed_user_ids:
-        logger.warning("No allowed_user_ids configured — inter-agent sessions use chat_id=0")
-        return 0
-    return orch._config.allowed_user_ids[0]
+    """Return the chat_id for inter-agent sessions.
+
+    Returns 0 as a default chat_id. WebUI transport will provide
+    a proper chat_id mechanism in the future.
+    """
+    return 0
 
 
 def _get_or_create_interagent_session(
@@ -163,7 +164,7 @@ async def handle_interagent_message(
 
     Uses a Named Session per sender so that context is preserved across
     multiple inter-agent interactions.  The session can also be resumed
-    manually from Telegram via ``@ia-{sender} <message>``.
+    manually via ``@ia-{sender} <message>``.
 
     Returns ``(result_text, session_name, provider_switch_notice)``.
     The *provider_switch_notice* is non-empty when a provider change
@@ -263,7 +264,7 @@ async def handle_async_interagent_result(
 
     session_hint = (
         f"\nThe recipient processed this in session `{result.session_name}`. "
-        f"The user can continue this session in the recipient's Telegram chat "
+        f"The user can continue this session in the recipient's chat "
         f"via `@{result.session_name} <message>`."
         if result.session_name
         else ""
@@ -280,8 +281,7 @@ async def handle_async_interagent_result(
         f"{result.result_text}\n"
         f"[END ASYNC INTER-AGENT RESPONSE]{session_hint}{task_context}\n\n"
         f"You are agent '{own_name}'. Process this response from agent "
-        f"'{recipient}' and communicate the relevant results to the user "
-        f"in your Telegram chat."
+        f"'{recipient}' and communicate the relevant results to the user."
     )
 
     logger.debug(

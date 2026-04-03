@@ -1,6 +1,6 @@
 """Direct API server: WebSocket + HTTP interface for app connections.
 
-Runs alongside the Telegram bot without affecting it.  Designed for use
+Runs alongside the bot.  Designed for use
 over Tailscale (default) or other private networks so that no traffic
 passes through third-party servers.
 
@@ -45,8 +45,11 @@ from collections.abc import Awaitable, Callable, Sequence
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
-import aiohttp
-from aiohttp import BodyPartReader, WSMsgType, web
+import uvicorn
+from fastapi import FastAPI, Query, Request, UploadFile, WebSocket, WebSocketDisconnect
+from starlette.datastructures import UploadFile as StarletteUploadFile
+from fastapi.responses import FileResponse, JSONResponse
+from starlette.websockets import WebSocketState
 
 from botwerk_bot.api.crypto import E2ESession
 from botwerk_bot.bus.lock_pool import LockPool
@@ -134,43 +137,26 @@ def _detect_tailscale() -> bool:
     return shutil.which("tailscale") is not None
 
 
-async def _ws_send(ws: web.WebSocketResponse, data: dict[str, object]) -> bool:
-    """Send plaintext JSON to a WebSocket (auth phase only).  Returns False on disconnect."""
-    if ws.closed:
-        return False
-    try:
-        await ws.send_json(data)
-    except (ConnectionResetError, ConnectionError):
-        return False
-    return True
-
-
-async def _ws_reject(ws: web.WebSocketResponse, code: str, message: str) -> None:
-    """Send an error response and close the WebSocket."""
-    await _ws_send(ws, {"type": "error", "code": code, "message": message})
-    await ws.close()
-
-
 class _SecureChannel:
     """Encrypted WebSocket channel for post-auth communication."""
 
     __slots__ = ("_e2e", "ws")
 
-    def __init__(self, ws: web.WebSocketResponse, e2e: E2ESession) -> None:
+    def __init__(self, ws: WebSocket, e2e: E2ESession) -> None:
         self.ws = ws
         self._e2e = e2e
 
     @property
     def closed(self) -> bool:
-        return bool(self.ws.closed)
+        return self.ws.client_state != WebSocketState.CONNECTED
 
     async def send(self, data: dict[str, object]) -> bool:
         """Encrypt and send.  Returns False if connection lost."""
-        if self.ws.closed:
+        if self.closed:
             return False
         try:
-            await self.ws.send_str(self._e2e.encrypt(data))
-        except (ConnectionResetError, ConnectionError):
+            await self.ws.send_text(self._e2e.encrypt(data))
+        except (ConnectionResetError, ConnectionError, RuntimeError, WebSocketDisconnect):
             return False
         return True
 
@@ -254,7 +240,7 @@ def _parse_file_refs(text: str) -> list[dict[str, object]]:
 class ApiServer:
     """WebSocket API server for direct app connections.
 
-    Provides the same orchestrator access as Telegram, without Telegram.
+    Provides direct orchestrator access via WebSocket/HTTP.
     All handler wiring is done via setter methods so the server module
     has zero imports from the orchestrator (no coupling).
     """
@@ -271,9 +257,9 @@ class ApiServer:
         self._max_upload_bytes = getattr(config, "max_upload_mb", _DEFAULT_MAX_UPLOAD_MB) * 1024 * 1024
         self._handle_message: StreamingMessageHandler | None = None
         self._handle_abort: AbortHandler | None = None
-        self._runner: web.AppRunner | None = None
+        self._server: uvicorn.Server | None = None
         self._lock_pool = lock_pool if lock_pool is not None else LockPool()
-        self._active_ws: set[web.WebSocketResponse] = set()
+        self._active_ws: set[WebSocket] = set()
         self._event_buffers: dict[int, _EventBuffer] = {}
         # File context (set via set_file_context)
         self._allowed_roots: Sequence[Path] | None = None
@@ -281,6 +267,20 @@ class ApiServer:
         self._workspace: Path | None = None
         self._provider_info: list[dict[str, object]] = []
         self._active_state_getter: Callable[[], tuple[str, str]] | None = None
+
+        # Build FastAPI app
+        self._app = FastAPI()
+        self._setup_routes()
+
+    def _setup_routes(self) -> None:
+        """Register all HTTP and WebSocket routes on the FastAPI app."""
+        self._app.get("/health")(self._handle_health)
+        self._app.get("/files", response_model=None)(self._handle_file_download)
+        self._app.post("/upload", response_model=None)(self._handle_file_upload)
+        self._app.post("/upload/multi", response_model=None)(self._handle_multi_file_upload)
+        self._app.get("/poll")(self._handle_poll)
+        self._app.post("/send")(self._handle_send)
+        self._app.websocket("/ws")(self._handle_websocket)
 
     # -- Handler wiring --------------------------------------------------------
 
@@ -315,7 +315,7 @@ class ApiServer:
     # -- Lifecycle -------------------------------------------------------------
 
     async def start(self) -> None:
-        """Create the aiohttp app and start listening."""
+        """Create the FastAPI app and start listening via Uvicorn."""
         if not _detect_tailscale() and not self._config.allow_public:
             logger.warning(
                 "API server: Tailscale NOT detected. Your API may be exposed "
@@ -326,19 +326,21 @@ class ApiServer:
                 self._config.port,
             )
 
-        app = web.Application(client_max_size=self._max_upload_bytes)
-        app.router.add_get("/health", self._handle_health)
-        app.router.add_get("/ws", self._handle_websocket)
-        app.router.add_get("/files", self._handle_file_download)
-        app.router.add_post("/upload", self._handle_file_upload)
-        app.router.add_post("/upload/multi", self._handle_multi_file_upload)
-        app.router.add_get("/poll", self._handle_poll)
-        app.router.add_post("/send", self._handle_send)
-
-        self._runner = web.AppRunner(app, access_log=None)
-        await self._runner.setup()
-        site = web.TCPSite(self._runner, self._config.host, self._config.port)
-        await site.start()
+        uv_config = uvicorn.Config(
+            self._app,
+            host=self._config.host,
+            port=self._config.port,
+            log_level="warning",
+            access_log=False,
+        )
+        self._server = uvicorn.Server(uv_config)
+        # Run in background task so it doesn't block
+        asyncio.ensure_future(self._server.serve())
+        # Wait briefly for the server to start
+        for _ in range(50):
+            if self._server.started:
+                break
+            await asyncio.sleep(0.05)
         logger.info(
             "API server listening on %s:%d",
             self._config.host,
@@ -348,14 +350,16 @@ class ApiServer:
     async def stop(self) -> None:
         """Close all connections and shut down the server."""
         for ws in list(self._active_ws):
-            await ws.close(
-                code=aiohttp.WSCloseCode.GOING_AWAY,
-                message=b"server shutdown",
-            )
+            try:
+                await ws.close(code=1001, reason="server shutdown")
+            except Exception:
+                pass
         self._active_ws.clear()
-        if self._runner:
-            await self._runner.cleanup()
-            self._runner = None
+        if self._server:
+            self._server.should_exit = True
+            # Give uvicorn a moment to shut down
+            await asyncio.sleep(0.1)
+            self._server = None
         logger.info("API server stopped")
 
     # -- Event buffer ----------------------------------------------------------
@@ -385,7 +389,7 @@ class ApiServer:
 
     # -- Bearer token auth for HTTP endpoints ----------------------------------
 
-    def _verify_bearer(self, request: web.Request) -> bool:
+    def _verify_bearer(self, request: Request) -> bool:
         """Check ``Authorization: Bearer <token>`` header."""
         auth = request.headers.get("Authorization", "")
         if not auth.startswith("Bearer "):
@@ -394,51 +398,44 @@ class ApiServer:
 
     # -- HTTP handlers ---------------------------------------------------------
 
-    async def _handle_health(self, _request: web.Request) -> web.Response:
-        return web.json_response(
+    async def _handle_health(self) -> JSONResponse:
+        return JSONResponse(
             {
                 "status": "ok",
                 "connections": len(self._active_ws),
             }
         )
 
-    async def _handle_file_download(self, request: web.Request) -> web.StreamResponse:
+    async def _handle_file_download(self, request: Request, path: str = Query("")) -> JSONResponse | FileResponse:  # noqa: E501
         """Serve a file from the filesystem (Bearer token auth, path validation)."""
         if not self._verify_bearer(request):
-            return web.json_response({"error": "unauthorized"}, status=401)
+            return JSONResponse({"error": "unauthorized"}, status_code=401)
 
-        raw_path = request.query.get("path", "")
-        if not raw_path:
-            return web.json_response({"error": "missing 'path' query parameter"}, status=400)
+        if not path:
+            return JSONResponse({"error": "missing 'path' query parameter"}, status_code=400)
 
-        file_path = Path(raw_path)
+        file_path = Path(path)
         if self._allowed_roots is not None and not is_path_safe(file_path, self._allowed_roots):
-            return web.json_response({"error": "path outside allowed roots"}, status=403)
+            return JSONResponse({"error": "path outside allowed roots"}, status_code=403)
 
         if not await asyncio.to_thread(file_path.is_file):
-            return web.json_response({"error": "file not found"}, status=404)
+            return JSONResponse({"error": "file not found"}, status_code=404)
 
         mime = guess_mime(file_path)
-        return web.FileResponse(file_path, headers={"Content-Type": mime})
+        return FileResponse(file_path, media_type=mime)
 
-    async def _handle_file_upload(self, request: web.Request) -> web.Response:
+    async def _handle_file_upload(self, request: Request, file: UploadFile | None = None, caption: str | None = None) -> JSONResponse:
         """Accept a multipart file upload and return the saved path + prompt."""
         if not self._verify_bearer(request):
-            return web.json_response({"error": "unauthorized"}, status=401)
+            return JSONResponse({"error": "unauthorized"}, status_code=401)
 
         if self._upload_dir is None or self._workspace is None:
-            return web.json_response({"error": "file uploads not configured"}, status=503)
+            return JSONResponse({"error": "file uploads not configured"}, status_code=503)
 
-        try:
-            reader = await request.multipart()
-        except ValueError:
-            return web.json_response({"error": "multipart body required"}, status=400)
+        if file is None:
+            return JSONResponse({"error": "expected a 'file' field"}, status_code=400)
 
-        field = await reader.next()
-        if not isinstance(field, BodyPartReader) or field.name != "file":
-            return web.json_response({"error": "expected a 'file' field"}, status=400)
-
-        raw_name = field.filename or "upload"
+        raw_name = file.filename or "upload"
         safe_name = sanitize_filename(raw_name)
 
         dest = await asyncio.to_thread(prepare_destination, self._upload_dir, safe_name)
@@ -446,26 +443,28 @@ class ApiServer:
         total = 0
         with dest.open("wb") as f:
             while True:
-                chunk = await field.read_chunk(65536)
+                chunk = await file.read(65536)
                 if not chunk:
                     break
                 total += len(chunk)
                 if total > self._max_upload_bytes:
                     dest.unlink(missing_ok=True)
-                    return web.json_response(
+                    return JSONResponse(
                         {"error": f"file exceeds {self._max_upload_bytes // (1024 * 1024)} MB limit"},
-                        status=413,
+                        status_code=413,
                     )
                 f.write(chunk)
 
         # Detect actual MIME from saved file content (magic bytes + extension fallback)
         mime = await asyncio.to_thread(guess_mime, dest)
 
-        # Read optional caption from a second multipart field
-        caption: str | None = None
-        next_field = await reader.next()
-        if isinstance(next_field, BodyPartReader) and next_field.name == "caption":
-            caption = (await next_field.read(decode=True)).decode("utf-8", errors="replace")
+        # Read optional caption from form field
+        if caption is None:
+            # Try reading from form data directly
+            form = await request.form()
+            caption_field = form.get("caption")
+            if caption_field is not None:
+                caption = str(caption_field)
 
         info = MediaInfo(
             path=dest,
@@ -477,7 +476,7 @@ class ApiServer:
         prompt = build_media_prompt(info, self._workspace, transport="API")
 
         logger.info("API upload: %s (%s, %d bytes)", dest.name, mime, total)
-        return web.json_response(
+        return JSONResponse(
             {
                 "path": str(dest),
                 "name": dest.name,
@@ -487,7 +486,7 @@ class ApiServer:
             }
         )
 
-    async def _handle_multi_file_upload(self, request: web.Request) -> web.Response:
+    async def _handle_multi_file_upload(self, request: Request) -> JSONResponse:
         """Accept multiple files in a single multipart upload.
 
         Each ``file`` field is saved independently.  An optional ``caption``
@@ -495,39 +494,33 @@ class ApiServer:
         Returns a JSON object with a ``files`` list and a combined ``prompt``.
         """
         if not self._verify_bearer(request):
-            return web.json_response({"error": "unauthorized"}, status=401)
+            return JSONResponse({"error": "unauthorized"}, status_code=401)
 
         if self._upload_dir is None or self._workspace is None:
-            return web.json_response({"error": "file uploads not configured"}, status=503)
+            return JSONResponse({"error": "file uploads not configured"}, status_code=503)
 
         try:
-            reader = await request.multipart()
-        except (ValueError, AssertionError):
-            # aiohttp raises AssertionError for non-multipart content types.
-            return web.json_response({"error": "multipart body required"}, status=400)
+            form = await request.form()
+        except Exception:
+            return JSONResponse({"error": "multipart body required"}, status_code=400)
 
         saved: list[dict[str, Any]] = []
         caption: str | None = None
         cumulative_bytes = 0
 
-        while True:
-            field = await reader.next()
-            if field is None:
-                break
+        # Extract caption if present
+        caption_field = form.get("caption")
+        if caption_field is not None:
+            caption = str(caption_field)
 
-            if not isinstance(field, BodyPartReader):
+        # Process all file fields — Starlette's multi_items() yields all entries
+        for field_name, upload in form.multi_items():
+            if field_name == "caption" or field_name != "file":
+                continue
+            if not isinstance(upload, (UploadFile, StarletteUploadFile)):
                 continue
 
-            if field.name == "caption":
-                caption = (await field.read(decode=True)).decode("utf-8", errors="replace")
-                continue
-
-            if field.name != "file":
-                # Skip unknown fields gracefully.
-                await field.read()
-                continue
-
-            raw_name = field.filename or "upload"
+            raw_name = upload.filename or "upload"
             safe_name = sanitize_filename(raw_name)
 
             dest = await asyncio.to_thread(prepare_destination, self._upload_dir, safe_name)
@@ -536,7 +529,7 @@ class ApiServer:
             try:
                 with dest.open("wb") as f:
                     while True:
-                        chunk = await field.read_chunk(65536)
+                        chunk = await upload.read(65536)
                         if not chunk:
                             break
                         file_bytes += len(chunk)
@@ -549,9 +542,9 @@ class ApiServer:
                 # Clean up already-saved files from this request.
                 for entry in saved:
                     Path(entry["path"]).unlink(missing_ok=True)
-                return web.json_response(
+                return JSONResponse(
                     {"error": f"total upload exceeds {self._max_upload_bytes // (1024 * 1024)} MB limit"},
-                    status=413,
+                    status_code=413,
                 )
 
             mime = await asyncio.to_thread(guess_mime, dest)
@@ -564,7 +557,7 @@ class ApiServer:
             logger.info("API multi-upload: %s (%s, %d bytes)", dest.name, mime, file_bytes)
 
         if not saved:
-            return web.json_response({"error": "no files received"}, status=400)
+            return JSONResponse({"error": "no files received"}, status_code=400)
 
         # Build individual MediaInfo objects and combine prompts.
         prompts: list[str] = []
@@ -580,7 +573,7 @@ class ApiServer:
 
         combined_prompt = "\n---\n".join(prompts)
 
-        return web.json_response({
+        return JSONResponse({
             "files": saved,
             "prompt": combined_prompt,
             "total_size": cumulative_bytes,
@@ -588,41 +581,38 @@ class ApiServer:
 
     # -- HTTP polling + send fallback ------------------------------------------
 
-    async def _handle_poll(self, request: web.Request) -> web.Response:
+    async def _handle_poll(self, request: Request, chat_id: int = Query(None), after: int = Query(0)) -> JSONResponse:
         """Return buffered events for a chat after a given sequence number.
 
         ``GET /poll?chat_id=N&after=S``  (Bearer token auth)
         """
         if not self._verify_bearer(request):
-            return web.json_response({"error": "unauthorized"}, status=401)
+            return JSONResponse({"error": "unauthorized"}, status_code=401)
 
-        try:
-            chat_id = int(request.query["chat_id"])
-        except (KeyError, ValueError):
-            return web.json_response({"error": "chat_id required (integer)"}, status=400)
+        if chat_id is None:
+            return JSONResponse({"error": "chat_id required (integer)"}, status_code=400)
 
-        after_seq = int(request.query.get("after", "0"))
         buf = self._event_buffers.get(chat_id)
         if buf is None:
-            return web.json_response({"seq": 0, "events": []})
+            return JSONResponse({"seq": 0, "events": []})
 
-        events = buf.after(after_seq)
-        return web.json_response({"seq": buf.seq, "events": events})
+        events = buf.after(after)
+        return JSONResponse({"seq": buf.seq, "events": events})
 
-    async def _handle_send(self, request: web.Request) -> web.Response:
+    async def _handle_send(self, request: Request) -> JSONResponse:
         """Accept a message via HTTP POST when WebSocket is unavailable.
 
         ``POST /send``  JSON body: ``{"chat_id": N, "text": "..."}``
-        Bearer token auth.  The response is NOT streamed — the client must
+        Bearer token auth.  The response is NOT streamed -- the client must
         poll ``/poll`` to receive streaming events and the final result.
         """
         if not self._verify_bearer(request):
-            return web.json_response({"error": "unauthorized"}, status=401)
+            return JSONResponse({"error": "unauthorized"}, status_code=401)
 
         try:
             body = await request.json()
         except (json.JSONDecodeError, ValueError):
-            return web.json_response({"error": "invalid JSON body"}, status=400)
+            return JSONResponse({"error": "invalid JSON body"}, status_code=400)
 
         chat_id = body.get("chat_id", self._default_chat_id)
         if not isinstance(chat_id, int) or chat_id <= 0:
@@ -630,10 +620,10 @@ class ApiServer:
 
         text = str(body.get("text", "")).strip()
         if not text:
-            return web.json_response({"error": "empty message"}, status=400)
+            return JSONResponse({"error": "empty message"}, status_code=400)
 
         if not self._handle_message:
-            return web.json_response({"error": "handler not configured"}, status=503)
+            return JSONResponse({"error": "handler not configured"}, status_code=503)
 
         channel_id = body.get("channel_id")
         if not isinstance(channel_id, int) or channel_id <= 0:
@@ -648,7 +638,7 @@ class ApiServer:
             if self._handle_abort:
                 killed = await self._handle_abort(chat_id)
             self._buffer_event(chat_id, {"type": "abort_ok", "killed": killed})
-            return web.json_response({"accepted": True, "type": "abort"})
+            return JSONResponse({"accepted": True, "type": "abort"})
 
         # Fire-and-forget: dispatch in background so we can return 202 immediately
         async def _run() -> None:
@@ -659,14 +649,14 @@ class ApiServer:
         asyncio.ensure_future(_run())
 
         buf = self._get_buffer(chat_id)
-        return web.json_response({"accepted": True, "seq": buf.seq}, status=202)
+        return JSONResponse({"accepted": True, "seq": buf.seq}, status_code=202)
 
     async def _dispatch_message_http(
         self,
         key: SessionKey,
         text: str,
     ) -> None:
-        """Dispatch a message from HTTP /send — results go only to the event buffer."""
+        """Dispatch a message from HTTP /send -- results go only to the event buffer."""
         assert self._handle_message is not None
 
         def buf(event: dict[str, object]) -> int:
@@ -703,59 +693,64 @@ class ApiServer:
 
     # -- WebSocket handlers ----------------------------------------------------
 
-    async def _handle_websocket(
-        self,
-        request: web.Request,
-    ) -> web.WebSocketResponse:
-        ws = web.WebSocketResponse(heartbeat=30.0)
-        await ws.prepare(request)
-        logger.info("API WebSocket opened from %s", request.remote)
+    async def _handle_websocket(self, websocket: WebSocket) -> None:
+        await websocket.accept()
+        logger.info("API WebSocket opened from %s", websocket.client)
 
-        auth_result = await self._authenticate(ws)
+        auth_result = await self._authenticate(websocket)
         if auth_result is None:
-            return ws
+            return
 
         key, e2e = auth_result
-        channel = _SecureChannel(ws, e2e)
+        channel = _SecureChannel(websocket, e2e)
 
-        self._active_ws.add(ws)
+        self._active_ws.add(websocket)
         try:
             await self._session_loop(channel, key)
-        except asyncio.CancelledError:
+        except (asyncio.CancelledError, WebSocketDisconnect):
             pass
         finally:
-            self._active_ws.discard(ws)
+            self._active_ws.discard(websocket)
             logger.info("API WebSocket closed key=%s", key.storage_key)
-
-        return ws
 
     # -- Authentication --------------------------------------------------------
 
-    async def _read_auth_message(self, ws: web.WebSocketResponse) -> dict[str, object] | None:
+    async def _ws_send(self, ws: WebSocket, data: dict[str, object]) -> bool:
+        """Send plaintext JSON to a WebSocket (auth phase only).  Returns False on disconnect."""
+        try:
+            await ws.send_json(data)
+        except (ConnectionResetError, ConnectionError, RuntimeError, WebSocketDisconnect):
+            return False
+        return True
+
+    async def _ws_reject(self, ws: WebSocket, code: str, message: str) -> None:
+        """Send an error response and close the WebSocket."""
+        await self._ws_send(ws, {"type": "error", "code": code, "message": message})
+        try:
+            await ws.close()
+        except Exception:
+            pass
+
+    async def _read_auth_message(self, ws: WebSocket) -> dict[str, object] | None:
         """Read and validate the initial auth message. Returns parsed data or None."""
         try:
-            raw = await asyncio.wait_for(ws.receive(), timeout=10.0)
-        except (TimeoutError, asyncio.CancelledError):
-            await _ws_reject(ws, "auth_timeout", "No auth message within 10 s")
+            raw = await asyncio.wait_for(ws.receive_json(), timeout=10.0)
+        except (TimeoutError, asyncio.CancelledError, WebSocketDisconnect):
+            await self._ws_reject(ws, "auth_timeout", "No auth message within 10 s")
             return None
-
-        if raw.type != WSMsgType.TEXT:
-            await _ws_reject(ws, "auth_required", "First message must be JSON text")
-            return None
-
-        try:
-            data = json.loads(raw.data)
         except (json.JSONDecodeError, ValueError):
-            data = None
-        if not isinstance(data, dict) or data.get("type") != "auth":
-            await _ws_reject(ws, "auth_required", "First message must be auth JSON")
+            await self._ws_reject(ws, "auth_required", "First message must be JSON text")
             return None
 
-        return data
+        if not isinstance(raw, dict) or raw.get("type") != "auth":
+            await self._ws_reject(ws, "auth_required", "First message must be auth JSON")
+            return None
+
+        return raw
 
     async def _authenticate(
         self,
-        ws: web.WebSocketResponse,
+        ws: WebSocket,
     ) -> tuple[SessionKey, E2ESession] | None:
         """Wait for auth + E2E key exchange.  Returns (key, e2e) or None."""
         data = await self._read_auth_message(ws)
@@ -765,7 +760,7 @@ class ApiServer:
         token = str(data.get("token", ""))
         if not hmac.compare_digest(token, self._config.token):
             logger.warning("API auth failed (invalid token)")
-            await _ws_reject(ws, "auth_failed", "Invalid token")
+            await self._ws_reject(ws, "auth_failed", "Invalid token")
             return None
 
         # E2E key exchange (mandatory)
@@ -779,7 +774,7 @@ class ApiServer:
             except Exception:
                 e2e_valid = False
         if not e2e_valid:
-            await _ws_reject(ws, "auth_failed", "e2e_pk required or invalid")
+            await self._ws_reject(ws, "auth_failed", "e2e_pk required or invalid")
             return None
 
         chat_id = data.get("chat_id", self._default_chat_id)
@@ -806,7 +801,7 @@ class ApiServer:
             active_provider, active_model = self._active_state_getter()
             auth_ok_payload["active_provider"] = active_provider
             auth_ok_payload["active_model"] = active_model
-        await _ws_send(ws, auth_ok_payload)
+        await self._ws_send(ws, auth_ok_payload)
         logger.info("API client authenticated key=%s (E2E)", key.storage_key)
         return key, e2e
 
@@ -821,11 +816,15 @@ class ApiServer:
         lock = self._lock_pool.get(key.lock_key)
         set_log_context(operation="api", chat_id=key.chat_id)
 
-        async for raw in channel.ws:
-            if raw.type == WSMsgType.TEXT:
-                await self._route_text_message(channel, raw.data, key, lock)
-            elif raw.type in (WSMsgType.ERROR, WSMsgType.CLOSE):
+        while True:
+            try:
+                msg = await channel.ws.receive_text()
+            except WebSocketDisconnect:
                 break
+            except RuntimeError:
+                # WebSocket already closed
+                break
+            await self._route_text_message(channel, msg, key, lock)
 
     async def _route_text_message(
         self,
@@ -910,7 +909,7 @@ class ApiServer:
 
         if callbacks.disconnected:
             logger.info(
-                "API client disconnected mid-stream key=%s — sending result anyway",
+                "API client disconnected mid-stream key=%s -- sending result anyway",
                 key.storage_key,
             )
 

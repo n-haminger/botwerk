@@ -1,9 +1,7 @@
 """Transport registry: centralizes bot creation for all transports.
 
-Instead of scattering ``if config.transport == "matrix"`` checks across
-the codebase, all transport-specific logic is registered here.
-Adding a new transport (e.g. Discord, Slack) requires only adding an
-entry to ``_TRANSPORT_FACTORIES``.
+After the removal of Telegram and Matrix transports, this module
+serves as a stub that will later register WebUIBot as the sole transport.
 """
 
 from __future__ import annotations
@@ -18,34 +16,24 @@ if TYPE_CHECKING:
 def create_bot(config: AgentConfig, *, agent_name: str = "main") -> BotProtocol:
     """Create the transport-specific bot for *config*.
 
-    Raises ``ValueError`` for unknown transport types.
+    Raises ``RuntimeError`` until a WebUI transport is registered.
     """
-    factory = _TRANSPORT_FACTORIES.get(config.transport)
+    factory = _TRANSPORT_FACTORIES.get("webui")
     if factory is None:
-        msg = f"Unknown transport: {config.transport!r}. Supported: {list(_TRANSPORT_FACTORIES)}"
-        raise ValueError(msg)
+        msg = (
+            "No transport registered. The WebUI transport must be registered "
+            "via register_transport() before creating a bot."
+        )
+        raise RuntimeError(msg)
     return factory(config, agent_name=agent_name)
 
 
-def _create_telegram(config: AgentConfig, *, agent_name: str) -> BotProtocol:
-    from botwerk_bot.bot.app import TelegramBot
-
-    return TelegramBot(config, agent_name=agent_name)
-
-
-def _create_matrix(config: AgentConfig, *, agent_name: str) -> BotProtocol:
-    from botwerk_bot.matrix.bot import MatrixBot
-
-    if not config.matrix or not config.matrix.homeserver:
-        msg = (
-            f"Matrix transport selected for agent {agent_name!r} but no "
-            f"homeserver configured. Check agents.json matrix section."
-        )
-        raise ValueError(msg)
-    return MatrixBot(config, agent_name=agent_name)
+def register_transport(
+    name: str,
+    factory: object,
+) -> None:
+    """Register a transport factory for later use by ``create_bot``."""
+    _TRANSPORT_FACTORIES[name] = factory
 
 
-_TRANSPORT_FACTORIES: dict[str, object] = {
-    "telegram": _create_telegram,
-    "matrix": _create_matrix,
-}
+_TRANSPORT_FACTORIES: dict[str, object] = {}

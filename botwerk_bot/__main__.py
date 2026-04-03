@@ -16,7 +16,6 @@ from rich.console import Console
 # tests that patch botwerk_bot.__main__.<name>.
 from botwerk_bot.cli_commands.agents import cmd_agents as _cmd_agents
 from botwerk_bot.cli_commands.api_cmd import cmd_api as _cmd_api
-from botwerk_bot.cli_commands.docker import cmd_docker as _cmd_docker
 from botwerk_bot.cli_commands.lifecycle import (  # noqa: F401
     _re_exec_bot,
 )
@@ -67,32 +66,10 @@ def _is_configured() -> bool:
     if not paths.config_path.exists():
         return False
     try:
-        data = json.loads(paths.config_path.read_text(encoding="utf-8"))
+        json.loads(paths.config_path.read_text(encoding="utf-8"))
     except (json.JSONDecodeError, OSError):
         return False
-
-    transport = data.get("transport", "telegram")
-    checker = _IS_CONFIGURED_CHECKS.get(transport, _is_configured_telegram)
-    return checker(data)
-
-
-def _is_configured_telegram(data: dict[str, object]) -> bool:
-    token = data.get("telegram_token", "")
-    users = data.get("allowed_user_ids", [])
-    return bool(token) and not str(token).startswith("YOUR_") and bool(users)
-
-
-def _is_configured_matrix(data: dict[str, object]) -> bool:
-    mx = data.get("matrix", {})
-    if not isinstance(mx, dict):
-        return False
-    return bool(mx.get("homeserver")) and bool(mx.get("user_id"))
-
-
-_IS_CONFIGURED_CHECKS: dict[str, Callable[[dict[str, object]], bool]] = {
-    "telegram": _is_configured_telegram,
-    "matrix": _is_configured_matrix,
-}
+    return True
 
 
 def load_config() -> AgentConfig:
@@ -166,10 +143,6 @@ async def run_bot(config: AgentConfig) -> int:
     """
     paths = resolve_paths(botwerk_home=config.botwerk_home)
 
-    validator = _TRANSPORT_VALIDATORS.get(config.transport)
-    if validator:
-        validator(config)
-
     from botwerk_bot.infra.pidlock import acquire_lock, release_lock
     from botwerk_bot.multiagent.supervisor import AgentSupervisor
 
@@ -207,47 +180,6 @@ async def run_bot(config: AgentConfig) -> int:
     return exit_code
 
 
-# Backward-compat alias for external scripts that call run_telegram().
-run_telegram = run_bot
-
-
-def _validate_telegram_config(config: AgentConfig) -> None:
-    """Validate Telegram transport requirements."""
-    missing_token = not config.telegram_token or config.telegram_token.startswith("YOUR_")
-    needs_users = not config.allowed_user_ids
-    if missing_token or needs_users:
-        _console.print(
-            "[bold yellow]Config is incomplete. Run [bold]botwerk onboarding[/bold].[/bold yellow]"
-        )
-        sys.exit(1)
-
-
-def _validate_matrix_config(config: AgentConfig) -> None:
-    """Validate Matrix transport requirements."""
-    m = config.matrix
-    hint = " Run [bold]botwerk onboarding[/bold] to reconfigure."
-    if not m.homeserver:
-        _console.print(f"[bold yellow]Matrix homeserver URL is required.{hint}[/bold yellow]")
-        sys.exit(1)
-    if not m.user_id:
-        _console.print(f"[bold yellow]Matrix user_id is required.{hint}[/bold yellow]")
-        sys.exit(1)
-    if not m.password and not m.access_token:
-        _console.print(
-            f"[bold yellow]Matrix password or access_token is required.{hint}[/bold yellow]"
-        )
-        sys.exit(1)
-    if not m.allowed_rooms and not m.allowed_users:
-        _console.print(
-            f"[bold yellow]At least one allowed_room or allowed_user is required.{hint}[/bold yellow]"
-        )
-        sys.exit(1)
-
-
-_TRANSPORT_VALIDATORS: dict[str, Callable[[AgentConfig], None]] = {
-    "telegram": _validate_telegram_config,
-    "matrix": _validate_matrix_config,
-}
 
 
 # ---------------------------------------------------------------------------
@@ -314,7 +246,6 @@ _COMMANDS: dict[str, str] = {
     "onboarding": "setup",
     "reset": "setup",
     "service": "service",
-    "docker": "docker",
     "api": "api",
     "agents": "agents",
 }
@@ -349,7 +280,6 @@ def main() -> None:
         "uninstall": _uninstall,
         "setup": lambda: _cmd_setup(verbose),
         "service": lambda: _cmd_service(args),
-        "docker": lambda: _cmd_docker(args),
         "api": lambda: _cmd_api(args),
         "agents": lambda: _cmd_agents(args),
     }

@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Forward a question to the parent agent from within a running task.
 
-The question is delivered to the parent agent's Telegram chat. The parent
+The question is delivered to the parent agent's chat. The parent
 will answer by resuming your task with the response. This call returns
 immediately — finish your current work and the parent will resume you.
 

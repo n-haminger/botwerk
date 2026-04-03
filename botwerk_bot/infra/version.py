@@ -6,13 +6,13 @@ import importlib.metadata
 import logging
 from dataclasses import dataclass
 
-import aiohttp
+import httpx
 
 logger = logging.getLogger(__name__)
 
 _GITHUB_RELEASES_URL = "https://api.github.com/repos/n-haminger/botwerk/releases"
 _PACKAGE_NAME = "botwerk"
-_TIMEOUT = aiohttp.ClientTimeout(total=10)
+_TIMEOUT = 10.0
 
 
 def get_current_version() -> str:
@@ -50,14 +50,12 @@ async def check_github_releases() -> VersionInfo | None:
     headers = {"Accept": "application/vnd.github+json"}
 
     try:
-        async with (
-            aiohttp.ClientSession(timeout=_TIMEOUT, headers=headers) as session,
-            session.get(f"{_GITHUB_RELEASES_URL}/latest") as resp,
-        ):
-            if resp.status != 200:
+        async with httpx.AsyncClient(timeout=_TIMEOUT, headers=headers) as client:
+            resp = await client.get(f"{_GITHUB_RELEASES_URL}/latest")
+            if resp.status_code != 200:
                 return None
-            data = await resp.json()
-    except (aiohttp.ClientError, TimeoutError, ValueError):
+            data = resp.json()
+    except (httpx.HTTPError, TimeoutError, ValueError):
         logger.debug("GitHub Releases version check failed", exc_info=True)
         return None
 
@@ -86,16 +84,14 @@ async def fetch_changelog(version: str) -> str | None:
     for tag in (f"v{version}", version):
         url = f"{_GITHUB_RELEASES_URL}/tags/{tag}"
         try:
-            async with (
-                aiohttp.ClientSession(timeout=_TIMEOUT, headers=headers) as session,
-                session.get(url) as resp,
-            ):
-                if resp.status != 200:
+            async with httpx.AsyncClient(timeout=_TIMEOUT, headers=headers) as client:
+                resp = await client.get(url)
+                if resp.status_code != 200:
                     continue
-                data = await resp.json()
+                data = resp.json()
                 body: str = data.get("body", "")
                 if body:
                     return body.strip()
-        except (aiohttp.ClientError, TimeoutError, ValueError):
+        except (httpx.HTTPError, TimeoutError, ValueError):
             logger.debug("GitHub release fetch failed for tag %s", tag, exc_info=True)
     return None

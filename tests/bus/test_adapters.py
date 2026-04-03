@@ -90,7 +90,7 @@ def test_from_background_result() -> None:
     assert env.delivery == DeliveryMode.UNICAST
     assert env.lock_mode == LockMode.NONE
     assert not env.needs_injection
-    assert env.reply_to_message_id == 42
+    assert env.metadata.get("message_id") == 42
     assert env.session_name == "my-session"
     assert env.provider == "claude"
     assert not env.is_error

@@ -29,7 +29,7 @@ def _setup_home_defaults(fw_root: Path) -> None:
     (inner / "CLAUDE.md").write_text("# Framework CLAUDE.md")
 
     # Subdirectory CLAUDE.md files
-    for subdir in ("memory_system", "cron_tasks", "output_to_user", "telegram_files"):
+    for subdir in ("memory_system", "cron_tasks", "output_to_user", "media_files"):
         d = inner / subdir
         d.mkdir()
         (d / "CLAUDE.md").write_text(f"# {subdir} CLAUDE.md")
@@ -155,7 +155,7 @@ def test_subdirectory_agents_md_created_from_claude_md(tmp_path: Path) -> None:
     paths = _make_paths(tmp_path)
     init_workspace(paths)
 
-    for subdir in ("memory_system", "cron_tasks", "output_to_user", "telegram_files"):
+    for subdir in ("memory_system", "cron_tasks", "output_to_user", "media_files"):
         agents = paths.workspace / subdir / "AGENTS.md"
         claude = paths.workspace / subdir / "CLAUDE.md"
         assert agents.exists(), f"AGENTS.md missing in {subdir}"
@@ -318,33 +318,24 @@ def test_cleans_orphan_symlinks(tmp_path: Path) -> None:
 # -- runtime environment injection --
 
 
-def test_inject_docker_notice(tmp_path: Path) -> None:
-    paths = _make_paths(tmp_path)
-    init_workspace(paths)
-    inject_runtime_environment(paths, docker_container="botwerk-sandbox")
-    content = (paths.workspace / "CLAUDE.md").read_text()
-    assert "DOCKER CONTAINER" in content
-    assert "botwerk-sandbox" in content
-    # AGENTS.md mirror should also have it
-    agents = (paths.workspace / "AGENTS.md").read_text()
-    assert "DOCKER CONTAINER" in agents
-
-
 def test_inject_host_notice(tmp_path: Path) -> None:
     paths = _make_paths(tmp_path)
     init_workspace(paths)
-    inject_runtime_environment(paths, docker_container="")
+    inject_runtime_environment(paths)
     content = (paths.workspace / "CLAUDE.md").read_text()
     assert "HOST SYSTEM" in content
     assert "NO SANDBOX" in content
+    # AGENTS.md mirror should also have it
+    agents = (paths.workspace / "AGENTS.md").read_text()
+    assert "HOST SYSTEM" in agents
 
 
 def test_inject_no_duplicate(tmp_path: Path) -> None:
     """Calling inject twice does not duplicate the section."""
     paths = _make_paths(tmp_path)
     init_workspace(paths)
-    inject_runtime_environment(paths, docker_container="ctr-1")
-    inject_runtime_environment(paths, docker_container="ctr-1")
+    inject_runtime_environment(paths)
+    inject_runtime_environment(paths)
     content = (paths.workspace / "CLAUDE.md").read_text()
     assert content.count("## Runtime Environment") == 1
 
@@ -353,12 +344,12 @@ def test_inject_refreshed_on_reinit(tmp_path: Path) -> None:
     """Workspace re-init overwrites Zone 2, then inject writes fresh notice."""
     paths = _make_paths(tmp_path)
     init_workspace(paths)
-    inject_runtime_environment(paths, docker_container="ctr-old")
+    inject_runtime_environment(paths)
     # Re-init overwrites CLAUDE.md (Zone 2), removing the old notice
     init_workspace(paths)
     content = (paths.workspace / "CLAUDE.md").read_text()
     assert "## Runtime Environment" not in content
     # Fresh inject
-    inject_runtime_environment(paths, docker_container="ctr-new")
+    inject_runtime_environment(paths)
     content = (paths.workspace / "CLAUDE.md").read_text()
-    assert "ctr-new" in content
+    assert "HOST SYSTEM" in content

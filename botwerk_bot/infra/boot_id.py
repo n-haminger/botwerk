@@ -19,7 +19,7 @@ _LINUX_BOOT_ID_PATH = Path("/proc/sys/kernel/random/boot_id")
 def get_boot_id() -> str:
     """Return a unique identifier for the current system boot.
 
-    - Linux/Docker: ``/proc/sys/kernel/random/boot_id``
+    - Linux: ``/proc/sys/kernel/random/boot_id``
     - macOS: ``sysctl -n kern.bootsessionuuid``
     - Windows: boot time derived from uptime counter
 
@@ -36,7 +36,7 @@ def get_boot_id() -> str:
 
 
 def _linux_boot_id() -> str:
-    """Read boot ID from /proc on Linux and Docker."""
+    """Read boot ID from /proc on Linux."""
     try:
         return _LINUX_BOOT_ID_PATH.read_text(encoding="utf-8").strip()
     except OSError:

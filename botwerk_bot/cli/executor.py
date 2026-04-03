@@ -31,9 +31,9 @@ def _build_subprocess_env(config: CLIConfig) -> dict[str, str] | None:
     """Build environment dict with agent identification vars.
 
     Returns None if no extra vars are needed (avoids inheriting a stripped env).
-    For non-Docker execution, the subprocess inherits the parent env plus the
-    agent identification variables.  User secrets from ``~/.botwerk/.env`` are
-    merged in without overriding existing variables.
+    The subprocess inherits the parent env plus the agent identification
+    variables.  User secrets from ``~/.botwerk/.env`` are merged in without
+    overriding existing variables.
     """
     import os
     from pathlib import Path

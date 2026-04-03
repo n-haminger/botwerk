@@ -37,7 +37,6 @@ def _make_cli(
     monkeypatch: pytest.MonkeyPatch,
     *,
     model: str = "opus",
-    docker_container: str = "",
     process_registry: ProcessRegistry | None = None,
     chat_id: int = 1,
     **kwargs: Any,
@@ -47,7 +46,6 @@ def _make_cli(
     cfg = CLIConfig(
         provider="claude",
         model=model,
-        docker_container=docker_container,
         process_registry=process_registry,
         chat_id=chat_id,
         **kwargs,
@@ -109,12 +107,6 @@ class TestInit:
         monkeypatch.setattr("botwerk_bot.cli.claude_provider.which", lambda _: None)
         with pytest.raises(FileNotFoundError, match="claude CLI not found"):
             ClaudeCodeCLI(CLIConfig(provider="claude"))
-
-    def test_docker_container_skips_find_cli(self, monkeypatch: pytest.MonkeyPatch) -> None:
-        """When docker_container is set, CLI binary = 'claude' without PATH lookup."""
-        monkeypatch.setattr("botwerk_bot.cli.claude_provider.which", lambda _: None)
-        cli = ClaudeCodeCLI(CLIConfig(provider="claude", docker_container="my-container"))
-        assert cli._cli == "claude"
 
     def test_working_dir_resolved(self, monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
         monkeypatch.setattr("botwerk_bot.cli.claude_provider.which", lambda _: "/usr/bin/claude")
@@ -336,19 +328,6 @@ class TestSend:
         else:
             assert "--resume" not in called_cmd
             assert "--continue" not in called_cmd
-
-    async def test_docker_container_wraps_command(self, monkeypatch: pytest.MonkeyPatch) -> None:
-        cli = _make_cli(monkeypatch, docker_container="sandbox-1", chat_id=55)
-        data = {"result": "OK"}
-        proc = _fake_process(stdout=json.dumps(data).encode())
-
-        with patch(_EXEC_PATH, return_value=proc) as mock_exec:
-            resp = await cli.send("hello")
-
-        called_cmd = mock_exec.call_args[0]
-        assert called_cmd[0] == "docker"
-        assert "sandbox-1" in called_cmd
-        assert resp.result == "OK"
 
     async def test_stderr_captured_in_response(self, monkeypatch: pytest.MonkeyPatch) -> None:
         cli = _make_cli(monkeypatch)

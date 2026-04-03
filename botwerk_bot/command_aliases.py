@@ -1,8 +1,7 @@
 """Centralised command alias resolution.
 
-Maps short aliases to their canonical command names.  Used by Telegram
-middleware (abort/interrupt detection), the orchestrator command registry,
-and the Matrix command dispatcher.
+Maps short aliases to their canonical command names.  Used by the
+orchestrator command registry and transport command dispatchers.
 """
 
 from __future__ import annotations

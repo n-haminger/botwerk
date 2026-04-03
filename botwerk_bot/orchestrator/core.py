@@ -24,7 +24,6 @@ from botwerk_bot.errors import (
     WebhookError,
     WorkspaceError,
 )
-from botwerk_bot.infra.docker import DockerManager
 from botwerk_bot.infra.inflight import InflightTracker
 from botwerk_bot.orchestrator.commands import (
     cmd_cron,
@@ -116,14 +115,12 @@ class Orchestrator:
         config: AgentConfig,
         paths: BotwerkPaths,
         *,
-        docker_container: str = "",
         agent_name: str = "main",
         interagent_port: int = 8799,
         agent_secret: str = "",
     ) -> None:
         self._config = config
         self._paths: BotwerkPaths = paths
-        self._docker: DockerManager | None = None
         self._providers = ProviderManager(config)
         self._sessions = SessionManager(paths.sessions_path, config)
         self._named_sessions = NamedSessionRegistry(paths.named_sessions_path)
@@ -138,7 +135,6 @@ class Orchestrator:
                 permission_mode=config.permission_mode,
                 reasoning_effort=config.reasoning_effort,
                 gemini_api_key=config.gemini_api_key,
-                docker_container=docker_container,
                 claude_cli_parameters=tuple(config.cli_parameters.claude),
                 codex_cli_parameters=tuple(config.cli_parameters.codex),
                 gemini_cli_parameters=tuple(config.cli_parameters.gemini),
@@ -322,8 +318,6 @@ class Orchestrator:
         )
         if result is not None:
             return result
-
-        await self._ensure_docker()
 
         directives = parse_directives(dispatch.text, self._providers._known_model_ids)
 
@@ -599,12 +593,6 @@ class Orchestrator:
         """Check if a chat has active CLI processes."""
         return self._process_registry.has_active(chat_id)
 
-    async def _ensure_docker(self) -> None:
-        """Health-check Docker before CLI calls; auto-recover or fall back."""
-        from botwerk_bot.orchestrator.lifecycle import ensure_docker
-
-        await ensure_docker(self)
-
     async def _start_api_server(
         self,
         config: AgentConfig,
@@ -619,7 +607,7 @@ class Orchestrator:
         self,
         handler: Callable[[AgentConfig, dict[str, object]], None],
     ) -> None:
-        """Register an external hot-reload callback (e.g. TelegramBot auth update)."""
+        """Register an external hot-reload callback (e.g. bot auth update)."""
         self._config_hot_reload_handler = handler
 
     def _on_config_hot_reload(self, config: AgentConfig, hot: dict[str, object]) -> None:
@@ -646,7 +634,6 @@ class Orchestrator:
                     permission_mode=config.permission_mode,
                     reasoning_effort=config.reasoning_effort,
                     gemini_api_key=config.gemini_api_key,
-                    docker_container=self._cli_service._config.docker_container,
                     claude_cli_parameters=tuple(config.cli_parameters.claude),
                     codex_cli_parameters=tuple(config.cli_parameters.codex),
                     gemini_cli_parameters=tuple(config.cli_parameters.gemini),

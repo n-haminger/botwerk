@@ -21,7 +21,7 @@ This is the navigation index for workspace tools.
 ## External API Secrets
 
 External API keys are loaded from `~/.botwerk/.env` and injected into all
-CLI subprocesses (host and Docker). Standard dotenv syntax:
+CLI subprocesses. Standard dotenv syntax:
 
 ```env
 PPLX_API_KEY=sk-xxx
