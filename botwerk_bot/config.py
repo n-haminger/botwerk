@@ -184,6 +184,17 @@ class ApiConfig(BaseModel):
     max_upload_mb: int = 100
 
 
+class WebUIConfig(BaseModel):
+    """Settings for the Web UI server."""
+
+    enabled: bool = False
+    host: str = "127.0.0.1"
+    port: int = 8080
+    behind_proxy: bool = False
+    secret_key: str = ""
+    frontend_dir: str = ""
+
+
 def deep_merge_config(
     user: dict[str, object],
     defaults: dict[str, object],
@@ -257,6 +268,7 @@ class AgentConfig(BaseModel):
     timeouts: TimeoutConfig = Field(default_factory=TimeoutConfig)
     tasks: TasksConfig = Field(default_factory=TasksConfig)
     memory: MemoryConfig = Field(default_factory=MemoryConfig)
+    webui: WebUIConfig = Field(default_factory=WebUIConfig)
     user_timezone: str = ""
     group_mention_only: bool = False
     interagent_port: int = 8799

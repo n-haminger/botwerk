@@ -43,6 +43,10 @@ dependencies = [
     "questionary>=2.1.1",
     "filetype>=1.2.0",
     "tzdata>=2024.1",
+    "aiosqlite>=0.21.0",
+    "sqlalchemy[asyncio]>=2.0",
+    "bcrypt>=4.0",
+    "pyjwt>=2.10",
 ]
 
 [project.optional-dependencies]

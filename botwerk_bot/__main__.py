@@ -35,6 +35,7 @@ from botwerk_bot.cli_commands.lifecycle import (
     upgrade as _upgrade,
 )
 from botwerk_bot.cli_commands.service import cmd_service as _cmd_service
+from botwerk_bot.cli_commands.setup import cmd_setup as _cmd_setup_webui
 from botwerk_bot.cli_commands.status import (
     print_status as _print_status,
 )
@@ -248,6 +249,7 @@ _COMMANDS: dict[str, str] = {
     "service": "service",
     "api": "api",
     "agents": "agents",
+    "setup": "setup_webui",
 }
 
 _Action = Callable[[], None]
@@ -282,6 +284,7 @@ def main() -> None:
         "service": lambda: _cmd_service(args),
         "api": lambda: _cmd_api(args),
         "agents": lambda: _cmd_agents(args),
+        "setup_webui": _cmd_setup_webui,
     }
 
     handler = dispatch.get(action) if action else None

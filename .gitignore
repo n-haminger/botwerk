@@ -53,6 +53,11 @@ desktop.ini
 *.log
 *.sock
 
+# Frontend
+frontend/node_modules/
+frontend/.svelte-kit/
+frontend/build/
+
 # Personal / dev-only (not part of the project)
 /start_bot.sh
 /python_best_practice.md
