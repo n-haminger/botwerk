@@ -340,3 +340,127 @@ export interface LinuxUser {
 export async function getLinuxUsers(): Promise<LinuxUser[]> {
 	return request<LinuxUser[]>("/api/explorer/users");
 }
+
+// -- Admin Config API ---------------------------------------------------------
+
+export interface ConfigResponse {
+	config: Record<string, unknown>;
+}
+
+export interface ConfigUpdateResponse {
+	status: string;
+	config: Record<string, unknown>;
+}
+
+export async function getConfig(): Promise<ConfigResponse> {
+	return request<ConfigResponse>("/api/admin/config");
+}
+
+export async function updateConfig(
+	updates: Record<string, unknown>,
+): Promise<ConfigUpdateResponse> {
+	return request<ConfigUpdateResponse>("/api/admin/config", {
+		method: "PUT",
+		body: JSON.stringify(updates),
+	});
+}
+
+// -- Admin User Management API ------------------------------------------------
+
+export interface AdminUser {
+	id: number;
+	username: string;
+	display_name: string;
+	is_admin: boolean;
+	created_at: string;
+	last_login: string | null;
+}
+
+export interface AdminUserCreate {
+	username: string;
+	password: string;
+	display_name?: string;
+	is_admin?: boolean;
+}
+
+export interface AdminUserUpdate {
+	password?: string;
+	display_name?: string;
+	is_admin?: boolean;
+}
+
+export interface AgentAssignmentResponse {
+	user_id: number;
+	agent_names: string[];
+}
+
+export async function getUsers(): Promise<AdminUser[]> {
+	return request<AdminUser[]>("/api/admin/users");
+}
+
+export async function createUser(data: AdminUserCreate): Promise<AdminUser> {
+	return request<AdminUser>("/api/admin/users", {
+		method: "POST",
+		body: JSON.stringify(data),
+	});
+}
+
+export async function updateUser(userId: number, data: AdminUserUpdate): Promise<AdminUser> {
+	return request<AdminUser>(`/api/admin/users/${userId}`, {
+		method: "PUT",
+		body: JSON.stringify(data),
+	});
+}
+
+export async function deleteUser(userId: number): Promise<void> {
+	return request<void>(`/api/admin/users/${userId}`, { method: "DELETE" });
+}
+
+export async function getUserAgents(userId: number): Promise<AgentAssignmentResponse> {
+	return request<AgentAssignmentResponse>(`/api/admin/users/${userId}/agents`);
+}
+
+export async function setUserAgents(
+	userId: number,
+	agentNames: string[],
+): Promise<AgentAssignmentResponse> {
+	return request<AgentAssignmentResponse>(`/api/admin/users/${userId}/agents`, {
+		method: "PUT",
+		body: JSON.stringify({ agent_names: agentNames }),
+	});
+}
+
+// -- Admin Cron API -----------------------------------------------------------
+
+export interface CronJob {
+	id: string;
+	title: string;
+	description: string;
+	schedule: string;
+	task_folder: string;
+	agent_instruction: string;
+	enabled: boolean;
+	timezone: string;
+	created_at: string;
+	last_run_at: string | null;
+	last_run_status: string | null;
+	next_run: string | null;
+	provider: string | null;
+	model: string | null;
+}
+
+export async function getCronJobs(): Promise<CronJob[]> {
+	return request<CronJob[]>("/api/admin/cron");
+}
+
+export async function enableCronJob(jobId: string): Promise<{ status: string }> {
+	return request<{ status: string }>(`/api/admin/cron/${jobId}/enable`, { method: "POST" });
+}
+
+export async function disableCronJob(jobId: string): Promise<{ status: string }> {
+	return request<{ status: string }>(`/api/admin/cron/${jobId}/disable`, { method: "POST" });
+}
+
+export async function triggerCronJob(jobId: string): Promise<{ status: string }> {
+	return request<{ status: string }>(`/api/admin/cron/${jobId}/trigger`, { method: "POST" });
+}

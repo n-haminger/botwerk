@@ -18,10 +18,13 @@ from botwerk_bot.webui.auth import get_current_user
 from botwerk_bot.webui.chat_service import ChatService
 from botwerk_bot.webui.routes.agent_routes import create_agent_router
 from botwerk_bot.webui.routes.auth_routes import create_auth_router
+from botwerk_bot.webui.routes.config_routes import create_config_router
+from botwerk_bot.webui.routes.cron_routes import create_cron_router
 from botwerk_bot.webui.routes.explorer_routes import create_explorer_router
 from botwerk_bot.webui.routes.file_routes import create_file_router
 from botwerk_bot.webui.routes.message_routes import create_message_router
 from botwerk_bot.webui.routes.status_routes import create_status_router
+from botwerk_bot.webui.routes.user_routes import create_user_router
 from botwerk_bot.webui.terminal import TerminalWebSocket
 from botwerk_bot.webui.websocket import ChatWebSocket
 
@@ -107,6 +110,11 @@ def create_webui_app(
 
     # System status routes.
     api_app.include_router(create_status_router(auth_dep))
+
+    # Admin routes: config, users, cron.
+    api_app.include_router(create_config_router(auth_dep))
+    api_app.include_router(create_user_router(auth_dep))
+    api_app.include_router(create_cron_router(auth_dep))
 
     app.mount("/api", api_app)
 

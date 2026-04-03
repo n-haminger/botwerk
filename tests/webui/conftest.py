@@ -50,6 +50,59 @@ def _test_agents_json(tmp_path):
 
 
 @pytest.fixture
+def _test_config_json(tmp_path):
+    """Create a test config.json and patch the config route path."""
+    path = tmp_path / "config.json"
+    config_data = {
+        "provider": "claude",
+        "model": "opus",
+        "log_level": "INFO",
+        "webui": {"enabled": True, "secret_key": "test-secret"},
+        "api": {"token": "real-token-value"},
+    }
+    path.write_text(json.dumps(config_data), encoding="utf-8")
+    with patch(
+        "botwerk_bot.webui.routes.config_routes._get_config_path",
+        return_value=path,
+    ):
+        yield path
+
+
+@pytest.fixture
+def _test_cron_json(tmp_path):
+    """Create a test cron_jobs.json and patch the cron route path."""
+    path = tmp_path / "cron_jobs.json"
+    cron_data = {
+        "jobs": [
+            {
+                "id": "test-job-1",
+                "title": "Test Job 1",
+                "description": "A test cron job",
+                "schedule": "0 9 * * *",
+                "task_folder": "test_task",
+                "agent_instruction": "do something",
+                "enabled": True,
+            },
+            {
+                "id": "test-job-2",
+                "title": "Test Job 2",
+                "description": "Another test cron job",
+                "schedule": "*/5 * * * *",
+                "task_folder": "test_task_2",
+                "agent_instruction": "do something else",
+                "enabled": False,
+            },
+        ]
+    }
+    path.write_text(json.dumps(cron_data), encoding="utf-8")
+    with patch(
+        "botwerk_bot.webui.routes.cron_routes._get_cron_path",
+        return_value=path,
+    ):
+        yield path
+
+
+@pytest.fixture
 def webui_app(db_engine, tmp_path, _test_agents_json):
     """Create a WebUI FastAPI app wired to the test database."""
     from botwerk_bot.config import WebUIConfig

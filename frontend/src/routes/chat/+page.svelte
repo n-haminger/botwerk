@@ -113,6 +113,15 @@
 						<a href="{base}/agents">
 							<Button variant="ghost" size="sm" class="text-zinc-400">Agents</Button>
 						</a>
+						<a href="{base}/admin/config">
+							<Button variant="ghost" size="sm" class="text-zinc-400">Config</Button>
+						</a>
+						<a href="{base}/admin/users">
+							<Button variant="ghost" size="sm" class="text-zinc-400">Users</Button>
+						</a>
+						<a href="{base}/admin/cron">
+							<Button variant="ghost" size="sm" class="text-zinc-400">Cron</Button>
+						</a>
 					{/if}
 					<span class="text-xs text-zinc-500">{auth.user.username}</span>
 					<Button variant="ghost" size="sm" class="text-zinc-400" onclick={handleLogout}>
