@@ -34,6 +34,7 @@ from botwerk_bot.cli_commands.lifecycle import (
 from botwerk_bot.cli_commands.lifecycle import (
     upgrade as _upgrade,
 )
+from botwerk_bot.cli_commands.build_frontend import cmd_build_frontend as _cmd_build_frontend
 from botwerk_bot.cli_commands.service import cmd_service as _cmd_service
 from botwerk_bot.cli_commands.setup import cmd_setup as _cmd_setup_webui
 from botwerk_bot.cli_commands.status import (
@@ -167,6 +168,17 @@ async def run_bot(config: AgentConfig) -> int:
                 continue
             installed_signals.append(sig)
 
+    # Start WebUI if enabled
+    webui_app = None
+    if config.webui.enabled:
+        try:
+            from botwerk_bot.webui.startup import start_webui
+
+            webui_app = await start_webui(config)
+            logger.info("WebUI started on %s:%d", config.webui.host, config.webui.port)
+        except Exception:
+            logger.exception("Failed to start WebUI — continuing without it")
+
     try:
         exit_code = await supervisor.start()
     except asyncio.CancelledError:
@@ -177,6 +189,14 @@ async def run_bot(config: AgentConfig) -> int:
         for sig in installed_signals:
             loop.remove_signal_handler(sig)
         await supervisor.stop_all()
+        # Shut down WebUI if it was started
+        if webui_app is not None:
+            server = getattr(webui_app.state, "uvicorn_server", None)
+            if server is not None:
+                server.should_exit = True
+            from botwerk_bot.webui.database import close_db
+
+            await close_db()
         release_lock(pid_file=paths.botwerk_home / "bot.pid")
     return exit_code
 
@@ -250,6 +270,7 @@ _COMMANDS: dict[str, str] = {
     "api": "api",
     "agents": "agents",
     "setup": "setup_webui",
+    "build-frontend": "build_frontend",
 }
 
 _Action = Callable[[], None]
@@ -285,6 +306,7 @@ def main() -> None:
         "api": lambda: _cmd_api(args),
         "agents": lambda: _cmd_agents(args),
         "setup_webui": _cmd_setup_webui,
+        "build_frontend": lambda: _cmd_build_frontend(args),
     }
 
     handler = dispatch.get(action) if action else None

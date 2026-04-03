@@ -185,6 +185,78 @@ def cmd_setup() -> None:
         asyncio.run(_create_user())
         _console.print(f"[green]Admin user '{username}' created.[/green]")
 
+    # -- systemd unit ----------------------------------------------------------
+
+    generate_unit = questionary.confirm(
+        "Generate a systemd service unit?",
+        default=False,
+    ).ask()
+    if generate_unit is None:
+        _console.print("[dim]Setup cancelled.[/dim]")
+        return
+
+    if generate_unit:
+        from botwerk_bot.webui.systemd import SystemdConfig, generate_systemd_unit
+
+        sd_user = questionary.text(
+            "Systemd service user:",
+            default="botwerk",
+        ).ask()
+        if sd_user is None:
+            _console.print("[dim]Setup cancelled.[/dim]")
+            return
+
+        sd_working_dir = questionary.text(
+            "Working directory:",
+            default="/opt/botwerk",
+        ).ask()
+        if sd_working_dir is None:
+            _console.print("[dim]Setup cancelled.[/dim]")
+            return
+
+        sd_config = SystemdConfig(
+            user=sd_user,
+            group=sd_user,
+            working_directory=sd_working_dir,
+            botwerk_home=str(paths.botwerk_home),
+            db_path=db_path,
+            upload_dir=str(paths.botwerk_home / "webui_uploads"),
+            port=port,
+        )
+        unit_content = generate_systemd_unit(sd_config)
+
+        unit_path = paths.botwerk_home / "botwerk.service"
+        unit_path.write_text(unit_content, encoding="utf-8")
+        _console.print(f"[green]Unit file written to {unit_path}[/green]")
+
+        install_unit = questionary.confirm(
+            "Install unit to /etc/systemd/system/botwerk.service? (requires sudo)",
+            default=False,
+        ).ask()
+        if install_unit:
+            import shutil
+            import subprocess
+
+            target = Path("/etc/systemd/system/botwerk.service")
+            try:
+                subprocess.run(
+                    ["sudo", "cp", str(unit_path), str(target)],
+                    check=True,
+                )
+                subprocess.run(
+                    ["sudo", "systemctl", "daemon-reload"],
+                    check=True,
+                )
+                _console.print("[green]Systemd unit installed and daemon reloaded.[/green]")
+                _console.print(
+                    "[dim]Enable with: sudo systemctl enable --now botwerk[/dim]"
+                )
+            except (subprocess.CalledProcessError, FileNotFoundError) as exc:
+                _console.print(
+                    f"[bold red]Failed to install unit:[/bold red] {exc}\n"
+                    f"[dim]You can manually copy {unit_path} to /etc/systemd/system/[/dim]"
+                )
+
     # -- Summary ---------------------------------------------------------------
 
     _console.print()

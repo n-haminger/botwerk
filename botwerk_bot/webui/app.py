@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import logging
 import secrets
+import time
 from pathlib import Path
 
 from fastapi import FastAPI, WebSocket
@@ -77,6 +78,8 @@ def create_webui_app(
     app.state.chat_service = chat_service or ChatService()
     app.state.secret_key = secret_key
     app.state.lock_pool = LockPool()
+    app.state.start_time = time.monotonic()
+    app.state.ws_clients: set[WebSocket] = set()
 
     # -- Proxy headers middleware ------------------------------------------
 
@@ -122,7 +125,39 @@ def create_webui_app(
 
     @app.get("/health")
     async def health() -> JSONResponse:
-        return JSONResponse({"status": "ok", "service": "webui"})
+        from botwerk_bot.infra.version import get_current_version
+
+        uptime_seconds = time.monotonic() - app.state.start_time
+
+        # Check database connectivity
+        db_ok = False
+        try:
+            from botwerk_bot.webui.database import _engine
+
+            if _engine is not None:
+                async with _engine.connect() as conn:
+                    await conn.exec_driver_sql("SELECT 1")
+                db_ok = True
+        except Exception:  # noqa: BLE001
+            pass
+
+        # Count active agents from chat service
+        active_agents = len(app.state.chat_service.agents) if hasattr(
+            app.state.chat_service, "agents"
+        ) else len(getattr(app.state.chat_service, "_orchestrators", {}))
+
+        # Count connected WebSocket clients
+        ws_clients = len(getattr(app.state, "ws_clients", set()))
+
+        return JSONResponse({
+            "status": "ok",
+            "service": "webui",
+            "version": get_current_version(),
+            "uptime_seconds": round(uptime_seconds, 1),
+            "database": "connected" if db_ok else "unavailable",
+            "active_agents": active_agents,
+            "websocket_clients": ws_clients,
+        })
 
     # -- WebSocket endpoints -----------------------------------------------
 
