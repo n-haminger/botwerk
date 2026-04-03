@@ -56,6 +56,24 @@ class TokenPayload(BaseModel):
 # -- Message schemas -------------------------------------------------------
 
 
+# -- File schemas -----------------------------------------------------------
+
+
+class FileResponse(BaseModel):
+    """Metadata for an uploaded file."""
+
+    id: int
+    name: str
+    mime: str
+    size: int
+    url: str
+    thumbnail_url: str | None = None
+    created_at: datetime.datetime
+
+
+# -- Message schemas -------------------------------------------------------
+
+
 class MessageCreate(BaseModel):
     """Payload for storing a new message."""
 

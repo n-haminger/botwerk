@@ -78,3 +78,41 @@ export async function getMessages(
 	if (beforeId !== undefined) params.set("before_id", String(beforeId));
 	return request<MessageRecord[]>(`/api/messages/${agentName}?${params}`);
 }
+
+// -- File API -----------------------------------------------------------------
+
+export interface FileRecord {
+	id: number;
+	name: string;
+	mime: string;
+	size: number;
+	url: string;
+	thumbnail_url: string | null;
+	created_at: string;
+}
+
+export async function uploadFile(file: File, agentName: string): Promise<FileRecord> {
+	const formData = new FormData();
+	formData.append("file", file);
+	if (agentName) formData.append("agent_name", agentName);
+
+	const res = await fetch("/api/files/upload", {
+		method: "POST",
+		credentials: "include",
+		body: formData,
+	});
+
+	if (!res.ok) {
+		const body = await res.json().catch(() => ({ detail: res.statusText }));
+		throw new Error(body.detail || `Upload failed: ${res.status}`);
+	}
+	return res.json();
+}
+
+export function getFileUrl(fileId: number): string {
+	return `/api/files/${fileId}`;
+}
+
+export function getThumbnailUrl(fileId: number): string {
+	return `/api/files/${fileId}?thumbnail=true`;
+}

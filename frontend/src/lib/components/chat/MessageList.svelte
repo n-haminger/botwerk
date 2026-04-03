@@ -79,6 +79,12 @@
 
 		return html;
 	}
+
+	function formatFileSize(bytes: number): string {
+		if (bytes < 1024) return `${bytes} B`;
+		if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
+		return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
+	}
 </script>
 
 <div
@@ -113,6 +119,41 @@
 				<div class="flex justify-start">
 					<div class="max-w-[85%] rounded-2xl rounded-bl-sm bg-zinc-800/60 px-4 py-2.5 text-sm leading-relaxed text-zinc-200">
 						{@html renderMarkdown(message.content)}
+
+						{#if message.files && message.files.length > 0}
+							<div class="mt-2 flex flex-wrap gap-2">
+								{#each message.files as file}
+									{#if file.is_image}
+										<a
+											href={file.path}
+											target="_blank"
+											rel="noopener noreferrer"
+											class="group block overflow-hidden rounded-lg border border-zinc-700 transition-colors hover:border-zinc-500"
+										>
+											<div class="flex h-32 w-32 items-center justify-center bg-zinc-900">
+												<svg class="h-8 w-8 text-zinc-600" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="1.5">
+													<path stroke-linecap="round" stroke-linejoin="round" d="m2.25 15.75 5.159-5.159a2.25 2.25 0 013.182 0l5.159 5.159m-1.5-1.5 1.409-1.409a2.25 2.25 0 013.182 0l2.909 2.909M3.75 21h16.5A2.25 2.25 0 0022.5 18.75V5.25A2.25 2.25 0 0020.25 3H3.75A2.25 2.25 0 001.5 5.25v13.5A2.25 2.25 0 003.75 21z" />
+												</svg>
+											</div>
+											<div class="px-2 py-1 text-xs text-zinc-400 truncate max-w-[128px]">
+												{file.name}
+											</div>
+										</a>
+									{:else}
+										<a
+											href={file.path}
+											download={file.name}
+											class="flex items-center gap-2 rounded-lg border border-zinc-700 px-3 py-2 text-xs text-zinc-300 transition-colors hover:border-zinc-500 hover:bg-zinc-800"
+										>
+											<svg class="h-4 w-4 shrink-0 text-zinc-500" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+												<path stroke-linecap="round" stroke-linejoin="round" d="M19.5 14.25v-2.625a3.375 3.375 0 00-3.375-3.375h-1.5A1.125 1.125 0 0113.5 7.125v-1.5a3.375 3.375 0 00-3.375-3.375H8.25m2.25 0H5.625c-.621 0-1.125.504-1.125 1.125v17.25c0 .621.504 1.125 1.125 1.125h12.75c.621 0 1.125-.504 1.125-1.125V11.25a9 9 0 00-9-9z" />
+											</svg>
+											<span class="truncate max-w-[150px]">{file.name}</span>
+										</a>
+									{/if}
+								{/each}
+							</div>
+						{/if}
 					</div>
 				</div>
 			{/if}

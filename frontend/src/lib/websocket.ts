@@ -12,11 +12,18 @@ export interface StreamDeltaEvent {
 	content: string;
 }
 
+export interface FileAttachment {
+	name: string;
+	path: string;
+	is_image: boolean;
+}
+
 export interface StreamEndEvent {
 	type: "stream_end";
 	channel: string;
 	message_id?: string;
 	content?: string;
+	files?: FileAttachment[];
 }
 
 export interface ToolActivityEvent {

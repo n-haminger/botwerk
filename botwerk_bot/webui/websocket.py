@@ -13,6 +13,7 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
 from botwerk_bot.bus.lock_pool import LockPool
+from botwerk_bot.files.tags import extract_file_paths, is_image_path
 from botwerk_bot.session import SessionKey
 from botwerk_bot.webui.auth import COOKIE_NAME, decode_token
 from botwerk_bot.webui.chat_service import ChatService
@@ -249,13 +250,29 @@ class ChatWebSocket:
                 content=final_text,
             )
 
+            # Detect <file:...> tags in the response and build file metadata.
+            file_paths = extract_file_paths(final_text)
+            files_meta: list[dict[str, object]] = []
+            for fp in file_paths:
+                from pathlib import Path as _Path
+
+                p = _Path(fp)
+                files_meta.append({
+                    "name": p.name,
+                    "path": fp,
+                    "is_image": is_image_path(fp),
+                })
+
             # Send stream_end.
-            await self._send(websocket, {
+            end_payload: dict[str, object] = {
                 "type": "stream_end",
                 "channel": channel,
                 "message_id": message_id,
                 "content": final_text,
-            })
+            }
+            if files_meta:
+                end_payload["files"] = files_meta
+            await self._send(websocket, end_payload)
 
     # -- Persistence -----------------------------------------------------------
 

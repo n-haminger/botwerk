@@ -119,6 +119,7 @@
 			<ChatInput
 				disabled={chat.connectionState !== "connected"}
 				isStreaming={chat.isStreaming}
+				agentName={chat.activeAgent ?? ""}
 				onSend={handleSend}
 				onAbort={handleAbort}
 			/>

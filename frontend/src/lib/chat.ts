@@ -1,4 +1,4 @@
-import { ChatWebSocket, type ConnectionState } from "./websocket.js";
+import { ChatWebSocket, type ConnectionState, type FileAttachment } from "./websocket.js";
 import { getMessages, type MessageRecord } from "./api.js";
 
 export interface ChatMessage {
@@ -8,6 +8,7 @@ export interface ChatMessage {
 	content: string;
 	timestamp: string;
 	toolActivity?: string;
+	files?: FileAttachment[];
 }
 
 interface ChannelState {
@@ -84,6 +85,7 @@ export const chat = {
 							role: "assistant",
 							content: event.content || _streamingContent,
 							timestamp: new Date().toISOString(),
+							files: event.files,
 						},
 					];
 					_isStreaming = false;

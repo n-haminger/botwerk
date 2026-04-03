@@ -18,6 +18,7 @@ from botwerk_bot.webui.auth import get_current_user
 from botwerk_bot.webui.chat_service import ChatService
 from botwerk_bot.webui.routes.agent_routes import create_agent_router
 from botwerk_bot.webui.routes.auth_routes import create_auth_router
+from botwerk_bot.webui.routes.file_routes import create_file_router
 from botwerk_bot.webui.routes.message_routes import create_message_router
 from botwerk_bot.webui.websocket import ChatWebSocket
 
@@ -43,6 +44,7 @@ class SPAStaticFiles(StaticFiles):
 def create_webui_app(
     config: WebUIConfig,
     chat_service: ChatService | None = None,
+    upload_dir: Path | None = None,
 ) -> FastAPI:
     """Build the WebUI FastAPI application from config.
 
@@ -92,6 +94,10 @@ def create_webui_app(
     )
     api_app.include_router(create_agent_router(auth_dep))
     api_app.include_router(create_message_router(auth_dep))
+
+    # File upload/download routes.
+    effective_upload_dir = upload_dir or Path.home() / ".botwerk" / "webui_uploads"
+    api_app.include_router(create_file_router(auth_dep, effective_upload_dir))
 
     app.mount("/api", api_app)
 

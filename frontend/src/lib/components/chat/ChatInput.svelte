@@ -1,12 +1,17 @@
 <script lang="ts">
+	import FileUpload from "./FileUpload.svelte";
+	import type { FileRecord } from "$lib/api.js";
+
 	let {
 		disabled = false,
 		isStreaming = false,
+		agentName = "",
 		onSend,
 		onAbort,
 	}: {
 		disabled?: boolean;
 		isStreaming?: boolean;
+		agentName?: string;
 		onSend: (content: string) => void;
 		onAbort?: () => void;
 	} = $props();
@@ -36,10 +41,25 @@
 			textareaEl.style.height = "auto";
 		}
 	}
+
+	function handleFileUploaded(file: FileRecord) {
+		// Insert a file reference into the message.
+		const ref = file.mime.startsWith("image/")
+			? `[Uploaded image: ${file.name}]`
+			: `[Uploaded file: ${file.name}]`;
+		text = text ? `${text}\n${ref}` : ref;
+		adjustHeight();
+	}
 </script>
 
-<div class="border-t border-zinc-800 bg-zinc-950 p-4">
+<div class="relative border-t border-zinc-800 bg-zinc-950 p-4">
 	<div class="mx-auto flex max-w-3xl items-end gap-2">
+		<FileUpload
+			{agentName}
+			disabled={disabled || isStreaming}
+			onFileUploaded={handleFileUploaded}
+		/>
+
 		<div class="relative flex-1">
 			<textarea
 				bind:this={textareaEl}

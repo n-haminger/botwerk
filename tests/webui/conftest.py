@@ -36,14 +36,15 @@ async def db_session(db_engine):
 
 
 @pytest.fixture
-def webui_app(db_engine):
+def webui_app(db_engine, tmp_path):
     """Create a WebUI FastAPI app wired to the test database."""
     from botwerk_bot.config import WebUIConfig
     from botwerk_bot.webui.app import create_webui_app
     from botwerk_bot.webui.database import get_db
 
+    upload_dir = tmp_path / "webui_uploads"
     config = WebUIConfig(enabled=True, secret_key=TEST_SECRET)
-    app = create_webui_app(config)
+    app = create_webui_app(config, upload_dir=upload_dir)
 
     # Override the DB dependency to use our test engine.
     factory = async_sessionmaker(db_engine, expire_on_commit=False)

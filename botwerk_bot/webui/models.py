@@ -55,6 +55,27 @@ class Message(Base):
     user: Mapped[User] = relationship(back_populates="messages")
 
 
+class File(Base):
+    """An uploaded file tracked by the WebUI."""
+
+    __tablename__ = "files"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    user_id: Mapped[int] = mapped_column(ForeignKey("users.id"), nullable=False)
+    agent_name: Mapped[str] = mapped_column(String(64), nullable=False, default="")
+    original_name: Mapped[str] = mapped_column(String(256), nullable=False)
+    stored_path: Mapped[str] = mapped_column(String(512), nullable=False)
+    mime_type: Mapped[str] = mapped_column(String(128), nullable=False)
+    size_bytes: Mapped[int] = mapped_column(Integer, nullable=False)
+    thumbnail_path: Mapped[str | None] = mapped_column(String(512), nullable=True, default=None)
+    created_at: Mapped[datetime.datetime] = mapped_column(
+        DateTime(timezone=True),
+        default=lambda: datetime.datetime.now(datetime.UTC),
+    )
+
+    user: Mapped[User] = relationship()
+
+
 class AgentAssignment(Base):
     """Maps which users can access which agents."""
 
