@@ -5,15 +5,16 @@ build-backend = "hatchling.build"
 [project]
 name = "botwerk"
 version = "1.4.1"
-description = "AI agent orchestrator with Web UI. Live streaming, sessions, cron jobs, webhooks."
+description = "Web-based multi-agent platform on Linux. Each agent = Linux user with POSIX isolation. Supports Claude Code, Codex, and Gemini CLIs."
 readme = "README.md"
 requires-python = ">=3.11"
 license = "MIT"
 license-files = ["LICENSE"]
 authors = [{ name = "PleasePrompto" }]
 keywords = [
-    "botwerk", "ai", "agent", "webui",
-    "claude", "codex", "cli", "automation", "streaming",
+    "botwerk", "ai", "agent", "multi-agent", "webui",
+    "claude", "codex", "gemini", "cli", "linux", "isolation",
+    "automation", "streaming", "fastapi", "sveltekit",
 ]
 classifiers = [
     "Development Status :: 4 - Beta",
