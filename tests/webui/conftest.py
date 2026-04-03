@@ -2,7 +2,9 @@
 
 from __future__ import annotations
 
+import json
 from pathlib import Path
+from unittest.mock import patch
 
 import pytest
 import pytest_asyncio
@@ -36,7 +38,19 @@ async def db_session(db_engine):
 
 
 @pytest.fixture
-def webui_app(db_engine, tmp_path):
+def _test_agents_json(tmp_path):
+    """Create an empty agents.json for tests and patch the default path."""
+    path = tmp_path / "agents.json"
+    path.write_text("[]", encoding="utf-8")
+    with patch(
+        "botwerk_bot.webui.routes.agent_routes._get_agents_path",
+        return_value=path,
+    ):
+        yield path
+
+
+@pytest.fixture
+def webui_app(db_engine, tmp_path, _test_agents_json):
     """Create a WebUI FastAPI app wired to the test database."""
     from botwerk_bot.config import WebUIConfig
     from botwerk_bot.webui.app import create_webui_app

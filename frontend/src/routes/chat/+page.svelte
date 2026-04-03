@@ -100,6 +100,11 @@
 
 			{#if auth.user}
 				<div class="flex items-center gap-2">
+					{#if auth.user.is_admin}
+						<a href="{base}/agents">
+							<Button variant="ghost" size="sm" class="text-zinc-400">Agents</Button>
+						</a>
+					{/if}
 					<span class="text-xs text-zinc-500">{auth.user.username}</span>
 					<Button variant="ghost" size="sm" class="text-zinc-400" onclick={handleLogout}>
 						Sign out

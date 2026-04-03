@@ -344,11 +344,21 @@ async def test_logout_without_auth(client: AsyncClient):
 
 
 @pytest.mark.asyncio
-async def test_agents_with_assignments(client: AsyncClient, db_session):
-    """Authenticated user with agent assignments sees them listed."""
-    from botwerk_bot.webui.models import AgentAssignment
+async def test_agents_with_assignments(
+    client: AsyncClient, db_session, _test_agents_json
+):
+    """Admin user sees agents from agents.json; non-admin sees DB assignments."""
+    import json
+    from botwerk_bot.webui.models import AgentAssignment, User
+    from botwerk_bot.webui.auth import hash_password
 
-    # Setup and login.
+    # Write agents to the test agents.json.
+    _test_agents_json.write_text(
+        json.dumps([{"name": "main"}, {"name": "helper"}]),
+        encoding="utf-8",
+    )
+
+    # Setup admin and login.
     await client.post("/api/auth/setup", json={
         "username": "admin",
         "password": "securepassword123",
@@ -358,14 +368,8 @@ async def test_agents_with_assignments(client: AsyncClient, db_session):
         "password": "securepassword123",
     })
     token_cookie = resp.cookies.get(COOKIE_NAME)
-    me_resp = await client.get("/api/auth/me", cookies={COOKIE_NAME: token_cookie})
-    user_id = me_resp.json()["id"]
 
-    # Add assignments directly.
-    db_session.add(AgentAssignment(user_id=user_id, agent_name="main"))
-    db_session.add(AgentAssignment(user_id=user_id, agent_name="helper"))
-    await db_session.commit()
-
+    # Admin sees all agents from agents.json.
     client.cookies.set(COOKIE_NAME, token_cookie)
     resp = await client.get("/api/agents")
     assert resp.status_code == 200
