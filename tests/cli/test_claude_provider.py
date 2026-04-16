@@ -519,14 +519,14 @@ class TestSendStreaming:
         assert len(result_events[0].result) == 500
 
     async def test_streaming_limit_set(self, monkeypatch: pytest.MonkeyPatch) -> None:
-        """Verify the 4MB buffer limit is passed to create_subprocess_exec."""
+        """Verify the 16MB buffer limit is passed to create_subprocess_exec."""
         cli = _make_cli(monkeypatch)
         proc = _fake_streaming_process([], returncode=0)
 
         with patch(_EXEC_PATH, return_value=proc) as mock_exec:
             await _collect_stream(cli)
 
-        assert mock_exec.call_args[1]["limit"] == 4 * 1024 * 1024
+        assert mock_exec.call_args[1]["limit"] == 16 * 1024 * 1024
 
     async def test_multiple_text_deltas(self, monkeypatch: pytest.MonkeyPatch) -> None:
         cli = _make_cli(monkeypatch)

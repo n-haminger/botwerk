@@ -5,10 +5,12 @@ from __future__ import annotations
 import logging
 from pathlib import Path
 
-from croniter import croniter
-from datetime import datetime, UTC
+from datetime import datetime
+
+from cronsim import CronSim, CronSimError
 from fastapi import APIRouter, Depends, HTTPException, status
 
+from botwerk_bot.config import resolve_user_timezone
 from botwerk_bot.cron.manager import CronJob, CronManager
 from botwerk_bot.webui.schemas import TokenPayload
 
@@ -23,13 +25,17 @@ def _get_cron_path() -> Path:
 
 
 def _next_run_iso(schedule: str, timezone: str = "") -> str | None:
-    """Calculate the next run time for a cron schedule expression."""
+    """Calculate the next run time for a cron schedule in the job's timezone.
+
+    Must match ``cron.observer`` semantics: cron expressions are interpreted
+    in the job's ``timezone`` (or the global ``user_timezone``), not UTC.
+    """
     try:
-        base = datetime.now(UTC)
-        cron = croniter(schedule, base)
-        next_dt = cron.get_next(datetime)
-        return next_dt.isoformat()
-    except (ValueError, KeyError):
+        tz = resolve_user_timezone(timezone)
+        base = datetime.now(tz).replace(tzinfo=None)
+        next_naive = next(CronSim(schedule, base))
+        return next_naive.replace(tzinfo=tz).isoformat()
+    except (CronSimError, StopIteration, ValueError):
         return None
 
 

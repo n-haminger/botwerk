@@ -16,7 +16,7 @@ from starlette.types import Receive, Scope, Send
 from botwerk_bot.bus.lock_pool import LockPool
 from botwerk_bot.config import WebUIConfig
 from botwerk_bot.webui.auth import get_current_user
-from botwerk_bot.webui.chat_service import ChatService
+from botwerk_bot.webui.chat_service import ChatService, get_chat_service
 from botwerk_bot.webui.routes.agent_routes import create_agent_router
 from botwerk_bot.webui.routes.auth_routes import create_auth_router
 from botwerk_bot.webui.routes.config_routes import create_config_router
@@ -75,7 +75,9 @@ def create_webui_app(
     )
 
     # Store references on app.state for access from WebSocket handler / tests.
-    app.state.chat_service = chat_service or ChatService()
+    # Default to the process-wide singleton so WebUIBot registrations are
+    # visible to the WebSocket handler without explicit wiring.
+    app.state.chat_service = chat_service or get_chat_service()
     app.state.secret_key = secret_key
     app.state.lock_pool = LockPool()
     app.state.start_time = time.monotonic()
@@ -141,10 +143,8 @@ def create_webui_app(
         except Exception:  # noqa: BLE001
             pass
 
-        # Count active agents from chat service
-        active_agents = len(app.state.chat_service.agents) if hasattr(
-            app.state.chat_service, "agents"
-        ) else len(getattr(app.state.chat_service, "_orchestrators", {}))
+        # Count active agents via the public ChatService API.
+        active_agents = len(app.state.chat_service.agent_names)
 
         # Count connected WebSocket clients
         ws_clients = len(getattr(app.state, "ws_clients", set()))

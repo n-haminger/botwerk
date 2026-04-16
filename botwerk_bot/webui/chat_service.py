@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import logging
 from collections.abc import Awaitable, Callable
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from typing import Any
 
 from botwerk_bot.session import SessionKey
@@ -100,3 +100,24 @@ class ChatService:
         except Exception:
             logger.exception("ChatService: error aborting for agent %r", agent_name)
         return False
+
+
+# Process-wide ChatService singleton.  The WebUI server and every WebUIBot
+# instance resolve the same object via ``get_chat_service()``.  This is the
+# bridge between the supervisor (which owns the orchestrators) and the
+# WebUI WebSocket layer (which speaks to the browser).
+_CHAT_SERVICE_SINGLETON: ChatService | None = None
+
+
+def get_chat_service() -> ChatService:
+    """Return the process-wide ChatService (creating it on first access)."""
+    global _CHAT_SERVICE_SINGLETON  # noqa: PLW0603
+    if _CHAT_SERVICE_SINGLETON is None:
+        _CHAT_SERVICE_SINGLETON = ChatService()
+    return _CHAT_SERVICE_SINGLETON
+
+
+def reset_chat_service() -> None:
+    """Reset the singleton (test-only)."""
+    global _CHAT_SERVICE_SINGLETON  # noqa: PLW0603
+    _CHAT_SERVICE_SINGLETON = None

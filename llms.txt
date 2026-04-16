@@ -106,7 +106,6 @@ Module-level references:
 
 - [bot](https://github.com/n-haminger/botwerk/blob/main/docs/modules/bot.md)
 - [orchestrator](https://github.com/n-haminger/botwerk/blob/main/docs/modules/orchestrator.md)
-- [cli](https://github.com/n-haminger/botwerk/blob/main/docs/modules/cli.md)
 - [session](https://github.com/n-haminger/botwerk/blob/main/docs/modules/session.md)
 - [background](https://github.com/n-haminger/botwerk/blob/main/docs/modules/background.md)
 - [tasks](https://github.com/n-haminger/botwerk/blob/main/docs/modules/tasks.md)
@@ -116,8 +115,6 @@ Module-level references:
 - [infra](https://github.com/n-haminger/botwerk/blob/main/docs/modules/infra.md)
 - [multiagent](https://github.com/n-haminger/botwerk/blob/main/docs/modules/multiagent.md)
 - [api](https://github.com/n-haminger/botwerk/blob/main/docs/modules/api.md)
-- [workspace](https://github.com/n-haminger/botwerk/blob/main/docs/modules/workspace.md)
-- [setup wizard / CLI commands](https://github.com/n-haminger/botwerk/blob/main/docs/modules/setup_wizard.md)
 
 Project root docs:
 

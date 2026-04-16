@@ -24,14 +24,34 @@ class TestSystemdUnit:
     def test_default_config(self) -> None:
         unit = generate_systemd_unit()
         assert "ProtectSystem=strict" in unit
-        assert "ProtectHome=read-only" in unit
-        assert "NoNewPrivileges=true" in unit
-        assert "CapabilityBoundingSet=" in unit
         assert "RestrictNamespaces=true" in unit
         assert "PrivateTmp=true" in unit
         assert "After=network.target" in unit
         assert "WantedBy=multi-user.target" in unit
         assert "Restart=on-failure" in unit
+
+    def test_hardening_lite_drops_sudo_incompatible_directives(self) -> None:
+        """Hardening-lite must NOT emit directives that block sudo.
+
+        Botwerk spawns terminals, manages Linux users, and applies
+        permission templates via ``sudo -u`` — any directive that
+        prevents privilege transitions breaks that model.
+        """
+        unit = generate_systemd_unit()
+        active = [
+            line.strip()
+            for line in unit.splitlines()
+            if line.strip() and not line.strip().startswith("#")
+        ]
+        forbidden = (
+            "NoNewPrivileges=true",
+            "CapabilityBoundingSet=",
+            "RestrictSUIDSGID=true",
+            "ProtectHome=read-only",
+        )
+        for directive in forbidden:
+            matches = [ln for ln in active if ln.startswith(directive)]
+            assert not matches, f"sudo-incompatible directive leaked: {directive}"
 
     def test_custom_user_and_port(self) -> None:
         config = SystemdConfig(user="myuser", group="mygroup", port=9090)
@@ -61,7 +81,6 @@ class TestSystemdUnit:
         assert "ProtectKernelTunables=true" in unit
         assert "ProtectKernelModules=true" in unit
         assert "ProtectControlGroups=true" in unit
-        assert "RestrictSUIDSGID=true" in unit
         assert "RestrictRealtime=true" in unit
         assert "LockPersonality=true" in unit
         assert "SystemCallArchitectures=native" in unit

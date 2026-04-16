@@ -49,6 +49,7 @@ dependencies = [
     "bcrypt>=4.0",
     "pyjwt>=2.10",
     "psutil>=5.9",
+    "pillow>=10.0",
 ]
 
 [project.optional-dependencies]

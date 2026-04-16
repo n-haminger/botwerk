@@ -1,11 +1,13 @@
 """Transport registry: centralizes bot creation for all transports.
 
-After the removal of Telegram and Matrix transports, this module
-serves as a stub that will later register WebUIBot as the sole transport.
+After the removal of Telegram and Matrix transports the WebUI is the
+only transport.  The registry still exists so tests and embedders can
+swap in a fake transport when needed.
 """
 
 from __future__ import annotations
 
+from collections.abc import Callable
 from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
@@ -13,27 +15,30 @@ if TYPE_CHECKING:
     from botwerk_bot.config import AgentConfig
 
 
-def create_bot(config: AgentConfig, *, agent_name: str = "main") -> BotProtocol:
-    """Create the transport-specific bot for *config*.
+_BotFactory = Callable[..., "BotProtocol"]
 
-    Raises ``RuntimeError`` until a WebUI transport is registered.
-    """
+
+def create_bot(config: AgentConfig, *, agent_name: str = "main") -> BotProtocol:
+    """Create the transport-specific bot for *config*."""
     factory = _TRANSPORT_FACTORIES.get("webui")
     if factory is None:
-        msg = (
-            "No transport registered. The WebUI transport must be registered "
-            "via register_transport() before creating a bot."
-        )
-        raise RuntimeError(msg)
+        # Lazy default registration so the WebUIBot import does not run at
+        # module load time (tests may override before any bot is created).
+        from botwerk_bot.bot.webui_bot import create_webui_bot
+
+        factory = create_webui_bot
+        _TRANSPORT_FACTORIES["webui"] = factory
     return factory(config, agent_name=agent_name)
 
 
-def register_transport(
-    name: str,
-    factory: object,
-) -> None:
+def register_transport(name: str, factory: _BotFactory) -> None:
     """Register a transport factory for later use by ``create_bot``."""
     _TRANSPORT_FACTORIES[name] = factory
 
 
-_TRANSPORT_FACTORIES: dict[str, object] = {}
+def clear_transports() -> None:
+    """Remove all registered transports (test-only)."""
+    _TRANSPORT_FACTORIES.clear()
+
+
+_TRANSPORT_FACTORIES: dict[str, _BotFactory] = {}

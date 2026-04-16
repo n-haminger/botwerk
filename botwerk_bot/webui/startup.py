@@ -12,7 +12,7 @@ from fastapi import FastAPI
 from sqlalchemy.ext.asyncio import async_sessionmaker
 
 from botwerk_bot.webui.app import create_webui_app
-from botwerk_bot.webui.chat_service import ChatService
+from botwerk_bot.webui.chat_service import get_chat_service
 from botwerk_bot.webui.database import init_db
 
 if TYPE_CHECKING:
@@ -44,8 +44,9 @@ async def start_webui(config: AgentConfig) -> FastAPI:
     # 1. Initialize the database
     engine = await init_db(db_path)
 
-    # 2. Create the FastAPI app
-    chat_service = ChatService()
+    # 2. Create the FastAPI app (uses the process-wide ChatService that
+    #    WebUIBot instances register themselves with).
+    chat_service = get_chat_service()
     app = create_webui_app(
         config=config.webui,
         chat_service=chat_service,

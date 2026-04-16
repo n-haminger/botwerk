@@ -72,17 +72,20 @@ ExecStart={config.exec_start}
 Restart=on-failure
 RestartSec=5
 {env_lines}
-# --- Security hardening ---
+# --- Security hardening (hardening-lite) ---
+#
+# Botwerk's security model relies on POSIX permissions and sudo to
+# switch into per-agent Linux users (terminal spawn, file explorer,
+# `useradd`, permission templates).  The usual hardening knobs that
+# block privilege changes (NoNewPrivileges, empty CapabilityBoundingSet,
+# RestrictSUIDSGID, ProtectHome=read-only) would break that model.
+# We keep all hardening directives that are compatible with sudo.
 ProtectSystem=strict
-ProtectHome=read-only
-NoNewPrivileges=true
-CapabilityBoundingSet=
-RestrictNamespaces=true
 PrivateTmp=true
 ProtectKernelTunables=true
 ProtectKernelModules=true
 ProtectControlGroups=true
-RestrictSUIDSGID=true
+RestrictNamespaces=true
 RestrictRealtime=true
 LockPersonality=true
 SystemCallArchitectures=native
